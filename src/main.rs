@@ -1,3 +1,6 @@
+mod scanner;
+
 fn main() {
-    println!("Hello, world!");
+		println!("Hello, world!");
+		let scanner = Scanner::new("hello world");
 }
