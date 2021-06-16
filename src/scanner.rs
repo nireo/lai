@@ -1,16 +1,16 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TokenType {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Token {
 		// Keywords
 		If,
 		Else,
 		Return,
-		Identifier,
 		String,
 		Integer,
 		Float,
 		Char,
-		Number,
 		Illegal,
+		Identifier(String),
+		Number(String),
 
 		// braces, brackets and parenthesis
 		LParen,
@@ -22,6 +22,7 @@ pub enum TokenType {
 		Semicolon,
 		Comma,
 		Dot,
+		Exclamation,
 
 		// equality tokens
 		Equals,
@@ -40,15 +41,10 @@ pub enum TokenType {
 		EOF,
 }
 
-pub struct Token {
-		pub token_type: TokenType,
-		pub lit: String,
-}
-
 pub struct Scanner {
 		input: String,
 		pos: usize,
-		ch: char,
+		ch: u8,
 		read_pos: usize,
 }
 
@@ -56,7 +52,7 @@ impl Scanner {
 		pub fn new(input_str: &str) -> Self {
 				let mut res = Self {
 						read_pos: 0,
-						ch: '\0',
+						ch: 0,
 						input: input_str.to_string(),
 						pos: 0,
 				};
@@ -65,28 +61,27 @@ impl Scanner {
 				res
 		}
 
-		fn is_letter(&self, ch: char) -> bool {
-				('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ch == '_'
-		}
-
-		fn check_if_keyword(&self, keyword: &str) -> TokenType {
+		fn check_if_keyword(&self, keyword: &str) -> Token {
 				let token_type = match keyword {
-						"if" => TokenType::If,
-						"else" => TokenType::Else,
-						"float" => TokenType::Float,
-						"char" => TokenType::Char,
-						"string" => TokenType::String,
-						"int" => TokenType::Integer,
-						_ => TokenType::Identifier,
+						"if" => Token::If,
+						"else" => Token::Else,
+						"float" => Token::Float,
+						"char" => Token::Char,
+						"string" => Token::String,
+						"int" => Token::Integer,
+						_ => Token::Identifier(keyword.to_string()),
 				};
 				token_type
 		}
 
 		fn read_char(&mut self) {
-				match self.input.chars().nth(self.read_pos) {
-						None => self.ch = '\0',
-						Some(ch) => self.ch = ch,
-				}
+				self.ch = {
+						if self.read_pos >= self.input.len() {
+								0
+						} else {
+								self.input.as_bytes()[self.read_pos]
+						}
+				};
 
 				self.pos = self.read_pos;
 				self.read_pos += 1;
@@ -94,24 +89,32 @@ impl Scanner {
 
 		fn read_identifier(&mut self) -> String {
 				let start_pos: usize = self.pos;
-				while self.is_letter(self.ch) {
-						self.read_char();
+				loop {
+						match self.ch {
+								b'a'..=b'z' | b'A'..=b'Z' | b'_' => self.read_char(),
+								_ => break,
+						}
 				}
 
-				return self.input[start_pos..self.pos - start_pos].to_string();
+				std::str::from_utf8(&self.input.as_bytes()[start_pos..self.pos])
+						.unwrap()
+						.to_string()
 		}
 
 		fn read_number(&mut self) -> String {
 				let start_pos: usize = self.pos;
-				while self.ch.is_numeric() {
-						self.read_char();
+				loop {
+						match self.ch {
+								b'0'..=b'9' => self.read_char(),
+								_ => break,
+						}
 				}
 
 				return self.input[start_pos..self.pos - start_pos].to_string();
 		}
 
 		fn skip_whitespace(&mut self) {
-				while self.ch == ' ' || self.ch == '\t' || self.ch == '\n' || self.ch == '\r' {
+				while self.ch == b' ' || self.ch == b'\t' || self.ch == b'\n' || self.ch == b'\r' {
 						self.read_char()
 				}
 		}
@@ -120,111 +123,62 @@ impl Scanner {
 				self.skip_whitespace();
 
 				let token = match self.ch {
-						'=' => Token {
-								token_type: TokenType::Assign,
-								lit: self.ch.to_string(),
-						},
-						';' => Token {
-								token_type: TokenType::Semicolon,
-								lit: self.ch.to_string(),
-						},
-						'}' => Token {
-								token_type: TokenType::RBrace,
-								lit: self.ch.to_string(),
-						},
-						'{' => Token {
-								token_type: TokenType::LBrace,
-								lit: self.ch.to_string(),
-						},
-						'[' => Token {
-								token_type: TokenType::LBracket,
-								lit: self.ch.to_string(),
-						},
-						']' => Token {
-								token_type: TokenType::RBracket,
-								lit: self.ch.to_string(),
-						},
-						'(' => Token {
-								token_type: TokenType::LParen,
-								lit: self.ch.to_string(),
-						},
-						')' => Token {
-								token_type: TokenType::RParen,
-								lit: self.ch.to_string(),
-						},
-						'+' => Token {
-								token_type: TokenType::Plus,
-								lit: self.ch.to_string(),
-						},
-						'-' => Token {
-								token_type: TokenType::Minus,
-								lit: self.ch.to_string(),
-						},
-						'/' => Token {
-								token_type: TokenType::Slash,
-								lit: self.ch.to_string(),
-						},
-						'*' => Token {
-								token_type: TokenType::Asterisk,
-								lit: self.ch.to_string(),
-						},
-						'%' => Token {
-								token_type: TokenType::Modulo,
-								lit: self.ch.to_string(),
-						},
-						'<' => Token {
-								token_type: TokenType::LessThan,
-								lit: self.ch.to_string(),
-						},
-						'>' => Token {
-								token_type: TokenType::GreaterThan,
-								lit: self.ch.to_string(),
-						},
-						'"' => Token {
-								token_type: TokenType::String,
-								lit: self.ch.to_string(),
-						},
-						'\0' => Token {
-								token_type: TokenType::EOF,
-								lit: self.ch.to_string(),
-						},
-						',' => Token {
-								token_type: TokenType::Comma,
-								lit: self.ch.to_string(),
-						},
-						'.' => Token {
-								token_type: TokenType::Dot,
-								lit: self.ch.to_string(),
-						},
-						_ => {
-								if self.is_letter(self.ch) {
-										// read identifier
-										let word = self.read_identifier();
-										return Token {
-												token_type: self.check_if_keyword(&word),
-												lit: word,
-										};
-								} else if self.ch.is_numeric() {
-										// read number
-										let number = self.read_number();
-										return Token {
-												token_type: TokenType::Number,
-												lit: number.to_string(),
-										};
-								} else {
-										let token = Token {
-												token_type: TokenType::Illegal,
-												lit: self.ch.to_string(),
-										};
+						b'=' => {
+								if self.peek_char() == b'=' {
 										self.read_char();
-										return token;
+										Token::Equals
+								} else {
+										Token::Assign
 								}
 						}
+						b'!' => {
+								if self.peek_char() == b'=' {
+										self.read_char();
+										Token::NEquals
+								} else {
+										Token::Exclamation
+								}
+						}
+						b'+' => Token::Plus,
+						b'*' => Token::Asterisk,
+						b'-' => Token::Minus,
+						b'/' => Token::Slash,
+						b'%' => Token::Modulo,
+						b'[' => Token::LBracket,
+						b']' => Token::RBracket,
+						b'{' => Token::LBrace,
+						b'}' => Token::RBrace,
+						b'(' => Token::LParen,
+						b')' => Token::RParen,
+						b',' => Token::Comma,
+						b';' => Token::Semicolon,
+						b'.' => Token::Dot,
+						b'<' => Token::LessThan,
+						b'>' => Token::GreaterThan,
+						b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+								let keyword = self.read_identifier();
+								return self.check_if_keyword(&keyword);
+						}
+						b'0'..=b'9' => {
+								let num = self.read_number();
+								Token::Number(num)
+						}
+						0 => Token::EOF,
+
+						_ => Token::Illegal,
 				};
 
 				self.read_char();
 
 				token
+		}
+
+		fn peek_char(&self) -> u8 {
+				if self.read_pos >= self.input.len() {
+						0
+				} else {
+						self.input.as_bytes()[self.read_pos]
+				}
 		}
 }
 
@@ -234,27 +188,28 @@ mod tests {
 
 		#[test]
 		fn basic_characters() {
-				let input = "=+(){}[],;.";
+				let input = "=+(){}[],;.!";
 				let mut lexer = Scanner::new(input);
 
 				let expected = vec![
-						TokenType::Assign,
-						TokenType::Plus,
-						TokenType::LParen,
-						TokenType::RParen,
-						TokenType::LBrace,
-						TokenType::RBrace,
-						TokenType::LBracket,
-						TokenType::RBracket,
-						TokenType::Comma,
-						TokenType::Semicolon,
-						TokenType::Dot,
-						TokenType::EOF,
+						Token::Assign,
+						Token::Plus,
+						Token::LParen,
+						Token::RParen,
+						Token::LBrace,
+						Token::RBrace,
+						Token::LBracket,
+						Token::RBracket,
+						Token::Comma,
+						Token::Semicolon,
+						Token::Dot,
+						Token::Exclamation,
+						Token::EOF,
 				];
 
 				for expected_token in expected.iter() {
 						let actual_token = lexer.next_token();
-						assert_eq!(*expected_token, actual_token.token_type);
+						assert_eq!(*expected_token, actual_token);
 				}
 		}
 
@@ -264,17 +219,24 @@ mod tests {
 
 				let mut lexer = Scanner::new(input);
 
-				let expected = vec![
-						TokenType::Integer,
-						TokenType::Float,
-						TokenType::If,
-						TokenType::Else,
-				];
+				let expected = vec![Token::Integer, Token::Float, Token::If, Token::Else];
 
 				for expected_token in expected.iter() {
 						let actual_token = lexer.next_token();
-						println!("{}", actual_token.lit);
-						assert_eq!(*expected_token, actual_token.token_type);
+						assert_eq!(*expected_token, actual_token);
+				}
+		}
+
+		#[test]
+		fn not_equals_equals() {
+				let input = "!= ==";
+				let mut lexer = Scanner::new(input);
+
+				let expected = vec![Token::NEquals, Token::Equals];
+
+				for expected_token in expected.iter() {
+						let actual_token = lexer.next_token();
+						assert_eq!(*expected_token, actual_token);
 				}
 		}
 }
