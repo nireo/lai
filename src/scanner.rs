@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
 		// Keywords
@@ -12,6 +10,7 @@ pub enum TokenType {
 		Float,
 		Char,
 		Number,
+		Illegal,
 
 		// braces, brackets and parenthesis
 		LParen,
@@ -22,6 +21,7 @@ pub enum TokenType {
 		RBracket,
 		Semicolon,
 		Comma,
+		Dot,
 
 		// equality tokens
 		Equals,
@@ -41,8 +41,8 @@ pub enum TokenType {
 }
 
 pub struct Token {
-		token_type: TokenType,
-		lit: String,
+		pub token_type: TokenType,
+		pub lit: String,
 }
 
 pub struct Scanner {
@@ -50,25 +50,16 @@ pub struct Scanner {
 		pos: usize,
 		ch: char,
 		read_pos: usize,
-
-		keywords: HashMap<String, TokenType>,
 }
 
 impl Scanner {
 		pub fn new(input_str: &str) -> Self {
-				let res = Self {
+				let mut res = Self {
 						read_pos: 0,
 						ch: '\0',
 						input: input_str.to_string(),
 						pos: 0,
-						keywords: HashMap::new(),
 				};
-
-				res.keywords.insert("return".to_string(), TokenType::Return);
-				res.keywords.insert("int".to_string(), TokenType::Return);
-				res.keywords.insert("float".to_string(), TokenType::Return);
-				res.keywords.insert("str".to_string(), TokenType::Return);
-				res.keywords.insert("char".to_string(), TokenType::Char);
 
 				res.read_char();
 				res
@@ -78,12 +69,17 @@ impl Scanner {
 				('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ch == '_'
 		}
 
-		fn check_if_keyword(&self, keyword: String) -> TokenType {
-				if let Some(value) = self.keywords.get(&keyword) {
-						value.clone()
-				} else {
-						TokenType::Identifier
-				}
+		fn check_if_keyword(&self, keyword: &str) -> TokenType {
+				let token_type = match keyword {
+						"if" => TokenType::If,
+						"else" => TokenType::Else,
+						"float" => TokenType::Float,
+						"char" => TokenType::Char,
+						"string" => TokenType::String,
+						"int" => TokenType::Integer,
+						_ => TokenType::Identifier,
+				};
+				token_type
 		}
 
 		fn read_char(&mut self) {
@@ -94,6 +90,24 @@ impl Scanner {
 
 				self.pos = self.read_pos;
 				self.read_pos += 1;
+		}
+
+		fn read_identifier(&mut self) -> String {
+				let start_pos: usize = self.pos;
+				while self.is_letter(self.ch) {
+						self.read_char();
+				}
+
+				return self.input[start_pos..self.pos - start_pos].to_string();
+		}
+
+		fn read_number(&mut self) -> String {
+				let start_pos: usize = self.pos;
+				while self.ch.is_numeric() {
+						self.read_char();
+				}
+
+				return self.input[start_pos..self.pos - start_pos].to_string();
 		}
 
 		fn skip_whitespace(&mut self) {
@@ -178,13 +192,17 @@ impl Scanner {
 								token_type: TokenType::Comma,
 								lit: self.ch.to_string(),
 						},
+						'.' => Token {
+								token_type: TokenType::Dot,
+								lit: self.ch.to_string(),
+						},
 						_ => {
 								if self.is_letter(self.ch) {
 										// read identifier
 										let word = self.read_identifier();
 										return Token {
-												token_type: self.check_if_keyword(word),
-												lit: word.to_string(),
+												token_type: self.check_if_keyword(&word),
+												lit: word,
 										};
 								} else if self.ch.is_numeric() {
 										// read number
@@ -193,33 +211,70 @@ impl Scanner {
 												token_type: TokenType::Number,
 												lit: number.to_string(),
 										};
-								}
-
-								Token {
-										token_type: TokenType::Identifier,
-										lit: self.ch.to_string(),
+								} else {
+										let token = Token {
+												token_type: TokenType::Illegal,
+												lit: self.ch.to_string(),
+										};
+										self.read_char();
+										return token;
 								}
 						}
 				};
 
+				self.read_char();
+
 				token
 		}
+}
 
-		fn read_identifier(&mut self) -> String {
-				let start_pos: usize = self.pos;
-				while self.is_letter(self.ch) {
-						self.read_char();
+#[cfg(test)]
+mod tests {
+		use super::*;
+
+		#[test]
+		fn basic_characters() {
+				let input = "=+(){}[],;.";
+				let mut lexer = Scanner::new(input);
+
+				let expected = vec![
+						TokenType::Assign,
+						TokenType::Plus,
+						TokenType::LParen,
+						TokenType::RParen,
+						TokenType::LBrace,
+						TokenType::RBrace,
+						TokenType::LBracket,
+						TokenType::RBracket,
+						TokenType::Comma,
+						TokenType::Semicolon,
+						TokenType::Dot,
+						TokenType::EOF,
+				];
+
+				for expected_token in expected.iter() {
+						let actual_token = lexer.next_token();
+						assert_eq!(*expected_token, actual_token.token_type);
 				}
-
-				return self.input[start_pos..self.pos - start_pos].to_string();
 		}
 
-		fn read_number(&mut self) -> String {
-				let start_pos: usize = self.pos;
-				while self.ch.is_numeric() {
-						self.read_char();
-				}
+		#[test]
+		fn keywords() {
+				let input = "int float if else";
 
-				return self.input[start_pos..self.pos - start_pos].to_string();
+				let mut lexer = Scanner::new(input);
+
+				let expected = vec![
+						TokenType::Integer,
+						TokenType::Float,
+						TokenType::If,
+						TokenType::Else,
+				];
+
+				for expected_token in expected.iter() {
+						let actual_token = lexer.next_token();
+						println!("{}", actual_token.lit);
+						assert_eq!(*expected_token, actual_token.token_type);
+				}
 		}
 }

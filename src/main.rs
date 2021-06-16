@@ -1,6 +1,6 @@
-mod scanner;
+pub mod parser;
+pub mod scanner;
 
 fn main() {
 		println!("Hello, world!");
-		let scanner = Scanner::new("hello world");
 }
