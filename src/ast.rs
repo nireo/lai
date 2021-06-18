@@ -12,6 +12,9 @@ pub enum Expression {
 		String(StringNode),
 		Function(FunctionNode),
 		FunctionCall(FunctionCallNode),
+
+		// this is for testing when something doesn't compile without struct member
+		NonExisting,
 }
 
 #[derive(Debug)]

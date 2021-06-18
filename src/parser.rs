@@ -9,19 +9,15 @@ pub struct Parser {
 }
 
 impl Parser {
-		pub fn new(existing_lexer: Scanner) -> Self {
-				let mut parser = Self {
-						lexer: existing_lexer,
+		pub fn new(mut lexer: Scanner) -> Self {
+				let current_token = lexer.next_token();
+				let peek_token = lexer.next_token();
 
-						// use to random tokens, since rust needs all of the struct fields initialized.
-						current_token: Token::EOF,
-						peek_token: Token::EOF,
-				};
-
-				parser.next_token();
-				parser.next_token();
-
-				parser
+				Self {
+						lexer,
+						current_token,
+						peek_token,
+				}
 		}
 
 		fn next_token(&mut self) {
@@ -38,6 +34,7 @@ impl Parser {
 				while self.current_token != Token::EOF {
 						let statement = self.parse_statement();
 						if !statement.is_none() {
+								println!("appended statement...");
 								root.statements.push(statement.unwrap());
 						}
 
@@ -47,7 +44,7 @@ impl Parser {
 				root
 		}
 
-		fn parse_statement(&mut self) -> Option<ast::Statement::Assigment> {
+		fn parse_statement(&mut self) -> Option<ast::Statement> {
 				match self.current_token {
 						Token::Integer | Token::Float | Token::Char | Token::String => {
 								self.parse_assigment_statement()
@@ -59,34 +56,35 @@ impl Parser {
 		fn parse_assigment_statement(&mut self) -> Option<ast::Statement> {
 				let assigment_type = self.current_token.clone();
 
+				self.next_token();
 				match &self.current_token {
 						Token::Identifier(_) => {}
 						_ => return None,
 				}
 
-				let name: &String = match &self.current_token {
-						Token::Identifier(value) => value,
+				let name: String = match &self.current_token {
+						Token::Identifier(value) => value.to_owned().clone(),
 						_ => return None,
 				};
+
+				self.next_token();
+
+				match &self.current_token {
+						Token::Assign => {}
+						_ => return None,
+				}
 
 				while self.current_token != Token::Semicolon {
 						self.next_token();
 				}
 
-				return Some(ast::Statement::Assigment(ast::AssigmentNode {
-						value: (),
-						variable_type: assigment_type,
-						name: name.to_owned(),
-				}));
-		}
+				println!("parsing statement...3");
 
-		fn expect_peek(&mut self, tok: Token) -> bool {
-				if self.peek_token == tok {
-						self.next_token();
-						true
-				} else {
-						false
-				}
+				return Some(ast::Statement::Assigment(ast::AssigmentNode {
+						value: ast::Expression::NonExisting,
+						variable_type: assigment_type,
+						name,
+				}));
 		}
 }
 
@@ -99,15 +97,13 @@ mod tests {
 		#[test]
 		fn test_assignment_statements() {
 				let input = "
-int x = 5;
-int y = 5;
-int z = 123123;
-";
+		int x = 5 ;
+		";
 
 				let lexer = scanner::Scanner::new(input);
 				let mut parser = Parser::new(lexer);
 
 				let root_node = parser.parse_root_node();
-				assert_eq!(root_node.statements.len(), 3);
+				assert_eq!(root_node.statements.len(), 1);
 		}
 }

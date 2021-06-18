@@ -110,7 +110,9 @@ impl Scanner {
 						}
 				}
 
-				return self.input[start_pos..self.pos - start_pos].to_string();
+				std::str::from_utf8(&self.input.as_bytes()[start_pos..self.pos])
+						.unwrap()
+						.to_string()
 		}
 
 		fn skip_whitespace(&mut self) {
@@ -164,7 +166,6 @@ impl Scanner {
 								Token::Number(num)
 						}
 						0 => Token::EOF,
-
 						_ => Token::Illegal,
 				};
 
@@ -233,6 +234,40 @@ mod tests {
 				let mut lexer = Scanner::new(input);
 
 				let expected = vec![Token::NEquals, Token::Equals];
+
+				for expected_token in expected.iter() {
+						let actual_token = lexer.next_token();
+						assert_eq!(*expected_token, actual_token);
+				}
+		}
+
+		#[test]
+		fn numbers() {
+				let input = "123123";
+
+				let mut lexer = Scanner::new(input);
+				let token = lexer.next_token();
+
+				match token {
+						Token::Number(value) => assert_eq!(value, "123123"),
+						_ => assert!(false), // XD,
+				}
+		}
+
+		#[test]
+		fn let_statement() {
+				let input = "int x = 10 ;";
+
+				let mut lexer = Scanner::new(input);
+
+				let expected = vec![
+						Token::Integer,
+						Token::Identifier("x".to_owned()),
+						Token::Assign,
+						Token::Number("10".to_owned()),
+						Token::Semicolon,
+						Token::EOF,
+				];
 
 				for expected_token in expected.iter() {
 						let actual_token = lexer.next_token();
