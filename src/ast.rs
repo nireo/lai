@@ -23,6 +23,11 @@ pub enum Statement {
 }
 
 #[derive(Debug)]
+pub struct Root {
+		pub statements: Vec<Statement>,
+}
+
+#[derive(Debug)]
 pub struct AssigmentNode {
 		pub variable_type: Token,
 		pub name: String,
