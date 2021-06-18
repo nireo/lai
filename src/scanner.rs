@@ -69,6 +69,7 @@ impl Scanner {
 						"char" => Token::Char,
 						"string" => Token::String,
 						"int" => Token::Integer,
+						"return" => Token::Return,
 						_ => Token::Identifier(keyword.to_string()),
 				};
 				token_type

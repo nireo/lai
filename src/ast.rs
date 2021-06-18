@@ -11,6 +11,7 @@ pub enum Expression {
 		Float(FloatNode),
 		String(StringNode),
 		Function(FunctionNode),
+		Identifier(IdentifierNode),
 		FunctionCall(FunctionCallNode),
 
 		// this is for testing when something doesn't compile without struct member
@@ -20,6 +21,7 @@ pub enum Expression {
 #[derive(Debug)]
 pub enum Statement {
 		Assigment(AssigmentNode),
+		Return(ReturnNode),
 		If(IfNode),
 		Block(BlockNode),
 		Expression(ExpressionStatementNode),
