@@ -117,15 +117,17 @@ impl Parser {
 				return Some(ast::Expression::Identifier(ast::IdentifierNode { name }));
 		}
 
-		fn parse_prefix(&self, tok: Token) -> Option<ast::Expression> {
+		fn parse_prefix(&mut self, tok: Token) -> Option<ast::Expression> {
 				match tok {
 						Token::Identifier(_) => self.parse_identifier(),
 						Token::Number(_) => self.parse_integer_literal(),
+						Token::Exclamation => self.parse_prefix_expression(),
+						Token::Minus => self.parse_prefix_expression(),
 						_ => None,
 				}
 		}
 
-		fn parse_expression(&self, prec: Precedence) -> Option<ast::Expression> {
+		fn parse_expression(&mut self, prec: Precedence) -> Option<ast::Expression> {
 				self.parse_prefix(self.current_token.clone())
 		}
 
@@ -148,6 +150,23 @@ impl Parser {
 
 				Some(ast::Expression::Integer(ast::IntegerNode { value }))
 		}
+
+		fn parse_prefix_expression(&mut self) -> Option<ast::Expression> {
+				let operator = self.current_token.clone();
+
+				self.next_token();
+
+				let right = self.parse_expression(Precedence::Prefix);
+
+				if right.is_none() {
+						return None;
+				}
+
+				Some(ast::Expression::Prefix(ast::PrefixExpression {
+						operator,
+						rhs: Box::new(right.unwrap()),
+				}))
+		}
 }
 
 #[cfg(test)]
@@ -155,6 +174,13 @@ mod tests {
 		use crate::scanner;
 
 		use super::*;
+
+		fn test_integer_obj(exp: &ast::Expression, expected_value: i32) -> bool {
+				match exp {
+						ast::Expression::Integer(value) => value.value == expected_value,
+						_ => false,
+				}
+		}
 
 		#[test]
 		fn test_assignment_statements() {
@@ -251,19 +277,19 @@ mod tests {
 		fn prefix_parsing() {
 				struct PrefixTestcase {
 						pub input: String,
-						pub operator: String,
+						pub operator: Token,
 						pub value: i32,
 				}
 
 				let test_cases = vec![
 						PrefixTestcase {
 								input: "!5 ;".to_owned(),
-								operator: "!".to_owned(),
+								operator: Token::Exclamation,
 								value: 5,
 						},
 						PrefixTestcase {
 								input: "-15 ;".to_owned(),
-								operator: "-".to_owned(),
+								operator: Token::Minus,
 								value: 15,
 						},
 				];
@@ -277,8 +303,12 @@ mod tests {
 
 						let is_correct_type = match &root_node.statements[0] {
 								ast::Statement::Expression(val) => {
-										let to_return = match val.value {
-												ast::Expression::Integer(_) => true,
+										let to_return = match &val.value {
+												ast::Expression::Prefix(prefix) => {
+														assert_eq!(prefix.operator, tc.operator);
+														assert!(test_integer_obj(&*prefix.rhs, tc.value));
+														true
+												}
 												_ => false,
 										};
 
