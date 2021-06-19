@@ -120,6 +120,7 @@ impl Parser {
 		fn parse_prefix(&self, tok: Token) -> Option<ast::Expression> {
 				match tok {
 						Token::Identifier(_) => self.parse_identifier(),
+						Token::Number(_) => self.parse_integer_literal(),
 						_ => None,
 				}
 		}
@@ -137,6 +138,15 @@ impl Parser {
 				Some(ast::Statement::Expression(ast::ExpressionStatementNode {
 						value: expression,
 				}))
+		}
+
+		fn parse_integer_literal(&self) -> Option<ast::Expression> {
+				let value: i32 = match &self.current_token {
+						Token::Number(value) => value.parse().unwrap(),
+						_ => return None,
+				};
+
+				Some(ast::Expression::Integer(ast::IntegerNode { value }))
 		}
 }
 
@@ -185,5 +195,99 @@ mod tests {
 				};
 
 				assert!(is_return_type);
+		}
+
+		#[test]
+		fn test_identifier_expression() {
+				let input = "foobar ;";
+
+				let lexer = scanner::Scanner::new(input);
+				let mut parser = Parser::new(lexer);
+
+				let root_node = parser.parse_root_node();
+				assert_eq!(root_node.statements.len(), 1);
+
+				let is_identifier_type = match &root_node.statements[0] {
+						ast::Statement::Expression(val) => {
+								let to_return = match val.value {
+										ast::Expression::Identifier(_) => true,
+										_ => false,
+								};
+
+								to_return
+						}
+						_ => false,
+				};
+
+				assert!(is_identifier_type);
+		}
+
+		#[test]
+		fn test_integer_literal() {
+				let input = "5 ;";
+
+				let lexer = scanner::Scanner::new(input);
+				let mut parser = Parser::new(lexer);
+
+				let root_node = parser.parse_root_node();
+				assert_eq!(root_node.statements.len(), 1);
+
+				let is_correct_type = match &root_node.statements[0] {
+						ast::Statement::Expression(val) => {
+								let to_return = match val.value {
+										ast::Expression::Integer(_) => true,
+										_ => false,
+								};
+
+								to_return
+						}
+						_ => false,
+				};
+
+				assert!(is_correct_type);
+		}
+
+		#[test]
+		fn prefix_parsing() {
+				struct PrefixTestcase {
+						pub input: String,
+						pub operator: String,
+						pub value: i32,
+				}
+
+				let test_cases = vec![
+						PrefixTestcase {
+								input: "!5 ;".to_owned(),
+								operator: "!".to_owned(),
+								value: 5,
+						},
+						PrefixTestcase {
+								input: "-15 ;".to_owned(),
+								operator: "-".to_owned(),
+								value: 15,
+						},
+				];
+
+				for tc in test_cases.iter() {
+						let lexer = scanner::Scanner::new(&tc.input);
+						let mut parser = Parser::new(lexer);
+
+						let root_node = parser.parse_root_node();
+						assert_eq!(root_node.statements.len(), 1);
+
+						let is_correct_type = match &root_node.statements[0] {
+								ast::Statement::Expression(val) => {
+										let to_return = match val.value {
+												ast::Expression::Integer(_) => true,
+												_ => false,
+										};
+
+										to_return
+								}
+								_ => false,
+						};
+
+						assert!(is_correct_type);
+				}
 		}
 }
