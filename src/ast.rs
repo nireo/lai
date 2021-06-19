@@ -14,6 +14,7 @@ pub enum Expression {
 		Identifier(IdentifierNode),
 		FunctionCall(FunctionCallNode),
 		Prefix(PrefixExpression),
+		Infix(InfixExpression),
 
 		// this is for testing when something doesn't compile without struct member
 		NonExisting,
@@ -44,6 +45,13 @@ pub struct AssigmentNode {
 pub struct PrefixExpression {
 		pub operator: Token,
 		pub rhs: Box<Expression>,
+}
+
+#[derive(Debug)]
+pub struct InfixExpression {
+		pub operator: Token,
+		pub rhs: Box<Expression>,
+		pub lhs: Box<Expression>,
 }
 
 #[derive(Debug)]

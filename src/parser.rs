@@ -8,14 +8,14 @@ pub struct Parser {
 		peek_token: Token,
 }
 
-enum Precedence {
-		Lowest = 0,
-		Equals = 1,
-		LT = 2,
-		Sum = 3,
-		Product = 4,
-		Prefix = 5,
-		Call = 6,
+pub enum Precedence {
+		Lowest,
+		Equals,
+		LT,
+		Sum,
+		Product,
+		Prefix,
+		Call,
 }
 
 impl Parser {
@@ -117,6 +117,12 @@ impl Parser {
 				return Some(ast::Expression::Identifier(ast::IdentifierNode { name }));
 		}
 
+		fn parse_infix(&mut self, tok: Token) -> Option<ast::Expression> {
+				match tok {
+						_ => None,
+				}
+		}
+
 		fn parse_prefix(&mut self, tok: Token) -> Option<ast::Expression> {
 				match tok {
 						Token::Identifier(_) => self.parse_identifier(),
@@ -128,7 +134,16 @@ impl Parser {
 		}
 
 		fn parse_expression(&mut self, prec: Precedence) -> Option<ast::Expression> {
-				self.parse_prefix(self.current_token.clone())
+				let mut left = self.parse_prefix(self.current_token.clone())?;
+
+				while self.peek_token != Token::Semicolon
+						&& Parser::precedence_to_num(&prec)
+								< Parser::precedence_to_num(&self.current_precedence())
+				{
+						left = self.parse_infix(self.peek_token.clone())?;
+				}
+
+				Some(left)
 		}
 
 		fn parse_expression_statement(&mut self) -> Option<ast::Statement> {
@@ -153,19 +168,62 @@ impl Parser {
 
 		fn parse_prefix_expression(&mut self) -> Option<ast::Expression> {
 				let operator = self.current_token.clone();
-
 				self.next_token();
-
-				let right = self.parse_expression(Precedence::Prefix);
-
-				if right.is_none() {
-						return None;
-				}
+				let right = self.parse_expression(Precedence::Prefix)?;
 
 				Some(ast::Expression::Prefix(ast::PrefixExpression {
 						operator,
-						rhs: Box::new(right.unwrap()),
+						rhs: Box::new(right),
 				}))
+		}
+
+		fn token_to_precedence(&self, token: &Token) -> Precedence {
+				match token {
+						Token::Equals => Precedence::Equals,
+						Token::NEquals => Precedence::Equals,
+						Token::LessThan => Precedence::LT,
+						Token::GreaterThan => Precedence::LT,
+						Token::Plus => Precedence::Sum,
+						Token::Minus => Precedence::Sum,
+						Token::Slash => Precedence::Product,
+						Token::Asterisk => Precedence::Product,
+						_ => Precedence::Lowest,
+				}
+		}
+
+		fn current_precedence(&self) -> Precedence {
+				self.token_to_precedence(&self.current_token)
+		}
+
+		fn peek_precedence(&self) -> Precedence {
+				self.token_to_precedence(&self.peek_token)
+		}
+
+		fn parse_infix_expression(&mut self, left: ast::Expression) -> Option<ast::Expression> {
+				let operator = self.current_token.clone();
+
+				let prec = self.current_precedence();
+				self.next_token();
+
+				let rhs = self.parse_expression(prec)?;
+
+				Some(ast::Expression::Infix(ast::InfixExpression {
+						lhs: Box::new(left),
+						rhs: Box::new(rhs),
+						operator,
+				}))
+		}
+
+		pub fn precedence_to_num(prec: &Precedence) -> i32 {
+				match prec {
+						Precedence::Lowest => 0,
+						Precedence::Equals => 1,
+						Precedence::LT => 2,
+						Precedence::Sum => 3,
+						Precedence::Product => 4,
+						Precedence::Prefix => 5,
+						Precedence::Call => 6,
+				}
 		}
 }
 
@@ -307,6 +365,76 @@ mod tests {
 												ast::Expression::Prefix(prefix) => {
 														assert_eq!(prefix.operator, tc.operator);
 														assert!(test_integer_obj(&*prefix.rhs, tc.value));
+														true
+												}
+												_ => false,
+										};
+
+										to_return
+								}
+								_ => false,
+						};
+
+						assert!(is_correct_type);
+				}
+		}
+
+		#[test]
+		fn test_parsing_infix_expression() {
+				struct InfixTestcase {
+						pub input: String,
+						pub operator: Token,
+				}
+
+				let test_cases = vec![
+						InfixTestcase {
+								input: "5 + 5 ;".to_owned(),
+								operator: Token::Plus,
+						},
+						InfixTestcase {
+								input: "5 - 5 ;".to_owned(),
+								operator: Token::Minus,
+						},
+						InfixTestcase {
+								input: "5 * 5 ;".to_owned(),
+								operator: Token::Asterisk,
+						},
+						InfixTestcase {
+								input: "5 / 5 ;".to_owned(),
+								operator: Token::Slash,
+						},
+						InfixTestcase {
+								input: "5 > 5 ;".to_owned(),
+								operator: Token::GreaterThan,
+						},
+						InfixTestcase {
+								input: "5 < 5 ;".to_owned(),
+								operator: Token::LessThan,
+						},
+						InfixTestcase {
+								input: "5 != 5 ;".to_owned(),
+								operator: Token::NEquals,
+						},
+						InfixTestcase {
+								input: "5 == 5 ;".to_owned(),
+								operator: Token::Equals,
+						},
+				];
+
+				for tc in test_cases.iter() {
+						let lexer = scanner::Scanner::new(&tc.input);
+						let mut parser = Parser::new(lexer);
+
+						let root_node = parser.parse_root_node();
+						assert_eq!(root_node.statements.len(), 1);
+
+						let is_correct_type = match &root_node.statements[0] {
+								ast::Statement::Expression(val) => {
+										let to_return = match &val.value {
+												ast::Expression::Infix(infix) => {
+														assert_eq!(infix.operator, tc.operator);
+														assert!(test_integer_obj(&*infix.rhs, 5));
+														assert!(test_integer_obj(&*infix.lhs, 5));
 														true
 												}
 												_ => false,
