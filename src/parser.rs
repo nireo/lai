@@ -135,8 +135,9 @@ impl Parser {
         match tok {
             Token::Identifier(_) => self.parse_identifier(),
             Token::Number(_) => self.parse_integer_literal(),
-            Token::Exclamation => self.parse_prefix_expression(),
-            Token::Minus => self.parse_prefix_expression(),
+            Token::Exclamation | Token::Minus => self.parse_prefix_expression(),
+            Token::True | Token::False => self.parse_boolean_literal(),
+
             _ => None,
         }
     }
@@ -233,6 +234,12 @@ impl Parser {
             Precedence::Call => 6,
         }
     }
+
+    fn parse_boolean_literal(&self) -> Option<ast::Expression> {
+        Some(ast::Expression::Boolean(ast::BooleanNode {
+            value: self.current_token == Token::True,
+        }))
+    }
 }
 
 #[cfg(test)]
@@ -244,6 +251,13 @@ mod tests {
     fn test_integer_obj(exp: &ast::Expression, expected_value: i32) -> bool {
         match exp {
             ast::Expression::Integer(value) => value.value == expected_value,
+            _ => false,
+        }
+    }
+
+    fn test_boolean_obj(exp: &ast::Expression, expected_value: bool) -> bool {
+        match exp {
+            ast::Expression::Boolean(value) => value.value == expected_value,
             _ => false,
         }
     }
@@ -389,43 +403,61 @@ mod tests {
 
     #[test]
     fn test_parsing_infix_expression() {
-        struct InfixTestcase {
+        struct InfixTestcase<T> {
             pub input: String,
             pub operator: Token,
+            pub lhs: T,
+            pub rhs: T,
         }
 
         let test_cases = vec![
             InfixTestcase {
                 input: "5 + 5 ;".to_owned(),
                 operator: Token::Plus,
+                lhs: 5,
+                rhs: 5,
             },
             InfixTestcase {
                 input: "5 - 5 ;".to_owned(),
                 operator: Token::Minus,
+                lhs: 5,
+                rhs: 5,
             },
             InfixTestcase {
                 input: "5 * 5 ;".to_owned(),
                 operator: Token::Asterisk,
+                lhs: 5,
+                rhs: 5,
             },
             InfixTestcase {
                 input: "5 / 5 ;".to_owned(),
                 operator: Token::Slash,
+                lhs: 5,
+                rhs: 5,
             },
             InfixTestcase {
                 input: "5 > 5 ;".to_owned(),
                 operator: Token::GreaterThan,
+                lhs: 5,
+                rhs: 5,
             },
             InfixTestcase {
                 input: "5 < 5 ;".to_owned(),
                 operator: Token::LessThan,
+                lhs: 5,
+                rhs: 5,
             },
             InfixTestcase {
                 input: "5 != 5 ;".to_owned(),
                 operator: Token::NEquals,
+                lhs: 5,
+                rhs: 5,
             },
             InfixTestcase {
                 input: "5 == 5 ;".to_owned(),
                 operator: Token::Equals,
+                lhs: 5,
+                rhs: 5,
             },
         ];
 
@@ -443,6 +475,108 @@ mod tests {
                             assert_eq!(infix.operator, tc.operator);
                             assert!(test_integer_obj(&*infix.rhs, 5));
                             assert!(test_integer_obj(&*infix.lhs, 5));
+                            true
+                        }
+                        _ => false,
+                    };
+
+                    to_return
+                }
+                _ => false,
+            };
+
+            assert!(is_correct_type);
+        }
+    }
+
+    #[test]
+    fn boolean_literal_test() {
+        struct BooleanTestcase {
+            pub input: String,
+            pub expected_val: bool,
+        }
+
+        let test_cases = vec![
+            BooleanTestcase {
+                input: "true ;".to_owned(),
+                expected_val: true,
+            },
+            BooleanTestcase {
+                input: "true ;".to_owned(),
+                expected_val: true,
+            },
+        ];
+
+        for tc in test_cases.iter() {
+            let lexer = scanner::Scanner::new(&tc.input);
+            let mut parser = Parser::new(lexer);
+
+            let root_node = parser.parse_root_node();
+            assert_eq!(root_node.statements.len(), 1);
+
+            let is_correct_type = match &root_node.statements[0] {
+                ast::Statement::Expression(val) => {
+                    let to_return = match &val.value {
+                        ast::Expression::Boolean(bol) => {
+                            assert_eq!(bol.value, tc.expected_val);
+                            true
+                        }
+                        _ => false,
+                    };
+
+                    to_return
+                }
+                _ => false,
+            };
+
+            assert!(is_correct_type);
+        }
+    }
+
+    #[test]
+    fn test_boolean_infix() {
+        struct InfixTestcase {
+            pub input: String,
+            pub operator: Token,
+            pub lhs: bool,
+            pub rhs: bool,
+        }
+
+        let test_cases = vec![
+            InfixTestcase {
+                input: "true == true ;".to_owned(),
+                operator: Token::Equals,
+                lhs: true,
+                rhs: true,
+            },
+            InfixTestcase {
+                input: "true != false ;".to_owned(),
+                operator: Token::NEquals,
+                lhs: true,
+                rhs: false,
+            },
+            InfixTestcase {
+                input: "false == false ;".to_owned(),
+                operator: Token::Equals,
+                lhs: false,
+                rhs: false,
+            },
+        ];
+
+        for tc in test_cases.iter() {
+            let lexer = scanner::Scanner::new(&tc.input);
+            let mut parser = Parser::new(lexer);
+
+            let root_node = parser.parse_root_node();
+            assert_eq!(root_node.statements.len(), 1);
+
+            let is_correct_type = match &root_node.statements[0] {
+                ast::Statement::Expression(val) => {
+                    let to_return = match &val.value {
+                        ast::Expression::Infix(infix) => {
+                            assert_eq!(infix.operator, tc.operator);
+                            assert!(test_boolean_obj(&*infix.rhs, tc.rhs));
+                            assert!(test_boolean_obj(&*infix.lhs, tc.lhs));
                             true
                         }
                         _ => false,
