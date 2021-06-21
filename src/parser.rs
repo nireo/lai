@@ -144,6 +144,7 @@ impl Parser {
         }
     }
 
+    // if (<expr>) { <statement> } else { <statement> }
     fn parse_if_expression(&mut self) -> Option<ast::Expression> {
         if self.peek_token != Token::LParen {
             return None;
@@ -151,7 +152,7 @@ impl Parser {
         self.next_token();
         self.next_token();
 
-        let condition = self.parse_expression(Precedence::Lowest)?;
+        let cond = Box::new(self.parse_expression(Precedence::Lowest)?);
 
         if self.peek_token != Token::RParen {
             return None;
@@ -163,15 +164,26 @@ impl Parser {
         }
         self.next_token();
 
-        let body = self.parse_block_statement()?;
+        let after = Box::new(self.parse_block_statement()?);
 
-        Some(ast::Expression::If(ast::IfNode {
-            other: None,
-            after: Box::new(body),
-            cond: Box::new(condition),
-        }))
+        let other: Option<Box<ast::Statement>> = match self.peek_token {
+            Token::Else => {
+                self.next_token();
+
+                if self.peek_token != Token::LBrace {
+                    return None;
+                }
+                self.next_token();
+
+                Some(Box::new(self.parse_block_statement()?))
+            }
+            _ => None,
+        };
+
+        Some(ast::Expression::If(ast::IfNode { other, after, cond }))
     }
 
+    // { <statement> }
     fn parse_block_statement(&mut self) -> Option<ast::Statement> {
         let mut statements: Vec<ast::Statement> = Vec::new();
         self.next_token();
@@ -185,6 +197,7 @@ impl Parser {
         Some(ast::Statement::Block(ast::BlockNode { statements }))
     }
 
+    // <expr>
     fn parse_expression(&mut self, prec: Precedence) -> Option<ast::Expression> {
         let mut left = self.parse_prefix(self.current_token.clone())?;
 
@@ -209,6 +222,7 @@ impl Parser {
         }))
     }
 
+    // 123123
     fn parse_integer_literal(&self) -> Option<ast::Expression> {
         let value: i32 = match &self.current_token {
             Token::Number(value) => value.parse().unwrap(),
@@ -218,6 +232,7 @@ impl Parser {
         Some(ast::Expression::Integer(ast::IntegerNode { value }))
     }
 
+    // !<expr> -<expr>
     fn parse_prefix_expression(&mut self) -> Option<ast::Expression> {
         let operator = self.current_token.clone();
         self.next_token();
@@ -636,7 +651,7 @@ mod tests {
 
     #[test]
     fn test_if_expression() {
-        let input = "if (x < y) { x }";
+        let input = "if (x < y) { x } else { y }";
         let lexer = scanner::Scanner::new(&input);
         let mut parser = Parser::new(lexer);
 
@@ -646,7 +661,13 @@ mod tests {
         let is_correct_type = match &root_node.statements[0] {
             ast::Statement::Expression(val) => {
                 let to_return = match &val.value {
-                    ast::Expression::If(_) => true,
+                    ast::Expression::If(exp) => {
+                        if exp.other.is_none() {
+                            false
+                        } else {
+                            true
+                        }
+                    }
                     _ => false,
                 };
 
