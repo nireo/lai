@@ -5,118 +5,116 @@ use crate::scanner::Token;
 
 #[derive(Debug)]
 pub enum Expression {
-		Integer(IntegerNode),
-		Char(CharNode),
-		Boolean(BooleanNode),
-		Float(FloatNode),
-		String(StringNode),
-		Function(FunctionNode),
-		Identifier(IdentifierNode),
-		FunctionCall(FunctionCallNode),
-		Prefix(PrefixExpression),
-		Infix(InfixExpression),
+    Integer(IntegerNode),
+    Char(CharNode),
+    Boolean(BooleanNode),
+    Float(FloatNode),
+    String(StringNode),
+    Function(FunctionNode),
+    Identifier(IdentifierNode),
+    FunctionCall(FunctionCallNode),
+    Prefix(PrefixExpression),
+    Infix(InfixExpression),
+    If(IfNode),
 
-		// this is for testing when something doesn't compile without struct member
-		NonExisting,
+    // this is for testing when something doesn't compile without struct member
+    NonExisting,
 }
 
 #[derive(Debug)]
 pub enum Statement {
-		Assigment(AssigmentNode),
-		Return(ReturnNode),
-		If(IfNode),
-		Block(BlockNode),
-		Expression(ExpressionStatementNode),
+    Assigment(AssigmentNode),
+    Return(ReturnNode),
+    Block(BlockNode),
+    Expression(ExpressionStatementNode),
 }
 
 #[derive(Debug)]
 pub struct Root {
-		pub statements: Vec<Statement>,
+    pub statements: Vec<Statement>,
 }
 
 #[derive(Debug)]
 pub struct AssigmentNode {
-		pub variable_type: Token,
-		pub name: String,
-		pub value: Expression,
+    pub variable_type: Token,
+    pub name: String,
+    pub value: Expression,
 }
 
 #[derive(Debug)]
 pub struct PrefixExpression {
-		pub operator: Token,
-		pub rhs: Box<Expression>,
+    pub operator: Token,
+    pub rhs: Box<Expression>,
 }
 
 #[derive(Debug)]
 pub struct InfixExpression {
-		pub operator: Token,
-		pub rhs: Box<Expression>,
-		pub lhs: Box<Expression>,
+    pub operator: Token,
+    pub rhs: Box<Expression>,
+    pub lhs: Box<Expression>,
 }
 
 #[derive(Debug)]
 pub struct ReturnNode {
-		pub value: Expression,
+    pub value: Expression,
 }
 
 #[derive(Debug)]
 pub struct IfNode {
-		pub value: Expression,
-
-		// the other statement doesn't need to exist
-		pub other: Option<Box<Statement>>,
-		pub after: Box<Statement>,
-		pub cond: Expression,
+    // the other statement doesn't need to exist
+    pub other: Option<Box<Statement>>,
+    pub after: Box<Statement>,
+    pub cond: Box<Expression>,
 }
 
 #[derive(Debug)]
 pub struct FunctionNode {
-		pub params: Vec<Expression>,
-		pub body: Box<Statement>,
+    pub params: Vec<Expression>,
+    pub body: Box<Statement>,
 }
 
 #[derive(Debug)]
 pub struct FunctionCallNode {
-		pub func: Box<Expression>,
-		pub args: Vec<Expression>,
+    pub func: Box<Expression>,
+    pub args: Vec<Expression>,
 }
 
 #[derive(Debug)]
 pub struct BlockNode {
-		pub statements: Vec<Statement>,
+    pub statements: Vec<Statement>,
 }
 
 #[derive(Debug)]
 pub struct IntegerNode {
-		pub value: i32,
+    pub value: i32,
 }
 
 #[derive(Debug)]
 pub struct BooleanNode {
-		pub value: bool,
+    pub value: bool,
 }
 
 #[derive(Debug)]
 pub struct FloatNode {
-		pub value: f32,
+    pub value: f32,
 }
 
 #[derive(Debug)]
 pub struct CharNode {
-		pub value: char,
+    pub value: char,
 }
 
 #[derive(Debug)]
 pub struct StringNode {
-		pub value: String,
+    pub value: String,
 }
 
 #[derive(Debug)]
 pub struct ExpressionStatementNode {
-		pub value: Expression,
+    pub value: Expression,
 }
 
 #[derive(Debug)]
 pub struct IdentifierNode {
-		pub name: String,
+    pub name: String,
 }
