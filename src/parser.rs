@@ -44,7 +44,6 @@ impl Parser {
         while self.current_token != Token::EOF {
             let statement = self.parse_statement();
             if !statement.is_none() {
-                println!("appended statement...");
                 root.statements.push(statement.unwrap());
             }
 
@@ -139,8 +138,73 @@ impl Parser {
             Token::True | Token::False => self.parse_boolean_literal(),
 
             Token::If => self.parse_if_expression(),
+            Token::Fn => self.parse_function_literal(),
 
             _ => None,
+        }
+    }
+
+    fn parse_function_literal(&mut self) -> Option<ast::Expression> {
+        // function keyword should be followed by the functions identifier.
+        let identifier = match self.peek_token {
+            Token::Identifier(_) => {
+                self.next_token();
+
+                self.parse_identifier()?
+            }
+            _ => return None,
+        };
+
+        println!("got identifier");
+
+        if self.peek_token != Token::LParen {
+            return None;
+        }
+        self.next_token();
+
+        println!("inside parenthesis");
+
+        if self.peek_token != Token::RParen {
+            return None;
+        }
+        self.next_token();
+
+        if self.peek_token != Token::Arrow {
+            return None;
+        }
+        self.next_token();
+
+        if !Parser::is_type_token(&self.peek_token) {
+            return None;
+        }
+        self.next_token();
+        let return_type = self.current_token.clone();
+
+        println!("got type");
+
+        if self.peek_token != Token::LBrace {
+            return None;
+        }
+        self.next_token();
+
+        println!("inside body");
+
+        let body = Box::new(self.parse_block_statement()?);
+
+        println!("got block");
+
+        Some(ast::Expression::Function(ast::FunctionNode {
+            params: Vec::new(),
+            body,
+            return_type,
+            identifier: Box::new(identifier),
+        }))
+    }
+
+    pub fn is_type_token(tok: &Token) -> bool {
+        match tok {
+            Token::Void | Token::Integer | Token::String | Token::Char | Token::Float => true,
+            _ => false,
         }
     }
 
@@ -663,6 +727,36 @@ mod tests {
                 let to_return = match &val.value {
                     ast::Expression::If(exp) => {
                         if exp.other.is_none() {
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    _ => false,
+                };
+
+                to_return
+            }
+            _ => false,
+        };
+
+        assert!(is_correct_type);
+    }
+
+    #[test]
+    fn test_function_literal() {
+        let input = "fn func() -> int { 1 }";
+        let lexer = scanner::Scanner::new(&input);
+        let mut parser = Parser::new(lexer);
+
+        let root_node = parser.parse_root_node();
+        assert_eq!(root_node.statements.len(), 1);
+
+        let is_correct_type = match &root_node.statements[0] {
+            ast::Statement::Expression(val) => {
+                let to_return = match &val.value {
+                    ast::Expression::Function(exp) => {
+                        if exp.return_type != Token::Integer {
                             false
                         } else {
                             true

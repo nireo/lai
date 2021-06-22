@@ -71,6 +71,8 @@ pub struct IfNode {
 pub struct FunctionNode {
     pub params: Vec<Expression>,
     pub body: Box<Statement>,
+    pub return_type: Token,
+    pub identifier: Box<Expression>,
 }
 
 #[derive(Debug)]

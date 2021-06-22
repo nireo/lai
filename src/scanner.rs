@@ -11,8 +11,10 @@ pub enum Token {
     Illegal,
     Identifier(String),
     Number(String),
+    Void,
     True,
     False,
+    Fn,
 
     // braces, brackets and parenthesis
     LParen,
@@ -25,6 +27,7 @@ pub enum Token {
     Comma,
     Dot,
     Exclamation,
+    Arrow,
 
     // equality tokens
     Equals,
@@ -74,6 +77,8 @@ impl Scanner {
             "return" => Token::Return,
             "true" => Token::True,
             "false" => Token::False,
+            "void" => Token::Void,
+            "fn" => Token::Fn,
             _ => Token::Identifier(keyword.to_string()),
         };
         token_type
@@ -148,7 +153,14 @@ impl Scanner {
             }
             b'+' => Token::Plus,
             b'*' => Token::Asterisk,
-            b'-' => Token::Minus,
+            b'-' => {
+                if self.peek_char() == b'>' {
+                    self.read_char();
+                    Token::Arrow
+                } else {
+                    Token::Minus
+                }
+            }
             b'/' => Token::Slash,
             b'%' => Token::Modulo,
             b'[' => Token::LBracket,
@@ -234,11 +246,11 @@ mod tests {
     }
 
     #[test]
-    fn not_equals_equals() {
-        let input = "!= ==";
+    fn not_equals_equals_arrow() {
+        let input = "!= == ->";
         let mut lexer = Scanner::new(input);
 
-        let expected = vec![Token::NEquals, Token::Equals];
+        let expected = vec![Token::NEquals, Token::Equals, Token::Arrow];
 
         for expected_token in expected.iter() {
             let actual_token = lexer.next_token();
