@@ -126,6 +126,8 @@ impl Parser {
             | Token::NEquals
             | Token::LessThan
             | Token::GreaterThan => self.parse_infix_expression(lhs),
+
+            Token::LParen => self.parse_call_expression(lhs),
             _ => None,
         }
     }
@@ -142,6 +144,41 @@ impl Parser {
 
             _ => None,
         }
+    }
+
+    fn parse_call_expression(&mut self, func: Box<ast::Expression>) -> Option<ast::Expression> {
+        let args = self.parse_call_arguments()?;
+
+        Some(ast::Expression::FunctionCall(ast::FunctionCallNode {
+            args,
+            func,
+        }))
+    }
+
+    fn parse_call_arguments(&mut self) -> Option<Vec<ast::Expression>> {
+        let mut arguments: Vec<ast::Expression> = Vec::new();
+
+        if self.peek_token == Token::RParen {
+            self.next_token();
+            return Some(arguments);
+        }
+        self.next_token();
+
+        arguments.push(self.parse_expression(Precedence::Lowest)?);
+
+        while self.peek_token == Token::Comma {
+            self.next_token();
+            self.next_token();
+
+            arguments.push(self.parse_expression(Precedence::Lowest)?);
+        }
+
+        if self.peek_token != Token::RParen {
+            return None;
+        }
+        self.next_token();
+
+        Some(arguments)
     }
 
     fn parse_function_literal(&mut self) -> Option<ast::Expression> {
@@ -355,6 +392,7 @@ impl Parser {
             Token::Minus => Precedence::Sum,
             Token::Slash => Precedence::Product,
             Token::Asterisk => Precedence::Product,
+            Token::LParen => Precedence::Call,
             _ => Precedence::Lowest,
         }
     }
@@ -861,6 +899,30 @@ mod tests {
                             true
                         }
                     }
+                    _ => false,
+                };
+
+                to_return
+            }
+            _ => false,
+        };
+
+        assert!(is_correct_type);
+    }
+
+    #[test]
+    fn call_expressions() {
+        let input = "equals(true, false);";
+        let lexer = scanner::Scanner::new(&input);
+        let mut parser = Parser::new(lexer);
+
+        let root_node = parser.parse_root_node();
+        assert_eq!(root_node.statements.len(), 1);
+
+        let is_correct_type = match &root_node.statements[0] {
+            ast::Statement::Expression(val) => {
+                let to_return = match &val.value {
+                    ast::Expression::FunctionCall(exp) => exp.args.len() == 2,
                     _ => false,
                 };
 
