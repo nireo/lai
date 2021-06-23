@@ -145,7 +145,6 @@ impl Parser {
     }
 
     fn parse_function_literal(&mut self) -> Option<ast::Expression> {
-        // function keyword should be followed by the functions identifier.
         let identifier = match self.peek_token {
             Token::Identifier(_) => {
                 self.next_token();
@@ -155,19 +154,12 @@ impl Parser {
             _ => return None,
         };
 
-        println!("got identifier");
-
         if self.peek_token != Token::LParen {
             return None;
         }
         self.next_token();
 
-        println!("inside parenthesis");
-
-        if self.peek_token != Token::RParen {
-            return None;
-        }
-        self.next_token();
+        let function_parameters = self.parse_function_parameters()?;
 
         if self.peek_token != Token::Arrow {
             return None;
@@ -180,25 +172,70 @@ impl Parser {
         self.next_token();
         let return_type = self.current_token.clone();
 
-        println!("got type");
-
         if self.peek_token != Token::LBrace {
             return None;
         }
         self.next_token();
 
-        println!("inside body");
-
         let body = Box::new(self.parse_block_statement()?);
 
-        println!("got block");
-
         Some(ast::Expression::Function(ast::FunctionNode {
-            params: Vec::new(),
+            params: function_parameters,
             body,
             return_type,
             identifier: Box::new(identifier),
         }))
+    }
+
+    fn parse_function_parameters(&mut self) -> Option<Vec<ast::Expression>> {
+        let mut res: Vec<ast::Expression> = Vec::new();
+
+        if self.peek_token == Token::RParen {
+            self.next_token();
+            return Some(res);
+        }
+        self.next_token();
+
+        if !Parser::is_type_token(&self.current_token) {
+            return None;
+        }
+        let first_param_type = self.current_token.clone();
+        self.next_token();
+
+        let first_param_name: String = match &self.current_token {
+            Token::Identifier(value) => value.to_owned().clone(),
+            _ => return None,
+        };
+
+        res.push(ast::Expression::FunctionParam(ast::FunctionParamNode {
+            name: first_param_name,
+            value_type: first_param_type,
+        }));
+
+        while self.peek_token == Token::Comma {
+            self.next_token();
+            self.next_token();
+
+            let param_type = self.current_token.clone();
+            self.next_token();
+
+            let param_name: String = match &self.current_token {
+                Token::Identifier(value) => value.to_owned().clone(),
+                _ => return None,
+            };
+
+            res.push(ast::Expression::FunctionParam(ast::FunctionParamNode {
+                name: param_name,
+                value_type: param_type,
+            }));
+        }
+
+        if self.peek_token != Token::RParen {
+            return None;
+        }
+        self.next_token();
+
+        Some(res)
     }
 
     pub fn is_type_token(tok: &Token) -> bool {
@@ -744,7 +781,7 @@ mod tests {
     }
 
     #[test]
-    fn test_function_literal() {
+    fn test_function_literal_no_params() {
         let input = "fn func() -> int { 1 }";
         let lexer = scanner::Scanner::new(&input);
         let mut parser = Parser::new(lexer);
@@ -759,6 +796,68 @@ mod tests {
                         if exp.return_type != Token::Integer {
                             false
                         } else {
+                            true
+                        }
+                    }
+                    _ => false,
+                };
+
+                to_return
+            }
+            _ => false,
+        };
+
+        assert!(is_correct_type);
+    }
+
+    #[test]
+    fn test_function_literal_with_params() {
+        struct ParamTest {
+            pub name: String,
+            pub param_type: Token,
+        }
+
+        let expected = vec![
+            ParamTest {
+                name: "x".to_owned(),
+                param_type: Token::Integer,
+            },
+            ParamTest {
+                name: "y".to_owned(),
+                param_type: Token::Float,
+            },
+            ParamTest {
+                name: "z".to_owned(),
+                param_type: Token::String,
+            },
+        ];
+
+        let input = "fn func(int x, float y, string z) -> int { 1 }";
+        let lexer = scanner::Scanner::new(&input);
+        let mut parser = Parser::new(lexer);
+
+        let root_node = parser.parse_root_node();
+        assert_eq!(root_node.statements.len(), 1);
+
+        let is_correct_type = match &root_node.statements[0] {
+            ast::Statement::Expression(val) => {
+                let to_return = match &val.value {
+                    ast::Expression::Function(exp) => {
+                        if exp.return_type != Token::Integer {
+                            false
+                        } else {
+                            let mut ok = true;
+                            for (i, param) in exp.params.iter().enumerate() {
+                                match param {
+                                    ast::Expression::FunctionParam(node) => {
+                                        assert!(expected[i].name == node.name);
+                                        assert!(expected[i].param_type == node.value_type);
+                                    }
+                                    _ => ok = false,
+                                }
+                            }
+
+                            assert!(ok);
                             true
                         }
                     }

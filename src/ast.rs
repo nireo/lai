@@ -16,6 +16,7 @@ pub enum Expression {
     Prefix(PrefixExpression),
     Infix(InfixExpression),
     If(IfNode),
+    FunctionParam(FunctionParamNode),
 
     // this is for testing when something doesn't compile without struct member
     NonExisting,
@@ -32,6 +33,12 @@ pub enum Statement {
 #[derive(Debug)]
 pub struct Root {
     pub statements: Vec<Statement>,
+}
+
+#[derive(Debug)]
+pub struct FunctionParamNode {
+    pub value_type: Token,
+    pub name: String,
 }
 
 #[derive(Debug)]
