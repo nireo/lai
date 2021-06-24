@@ -462,7 +462,7 @@ mod tests {
     #[test]
     fn test_assignment_statements() {
         let input = "
-    int x = 5 ;
+    int x = 5;
     ";
 
         let lexer = scanner::Scanner::new(input);
@@ -483,7 +483,7 @@ mod tests {
     #[test]
     fn test_return_statements() {
         let input = "
-    return 5 ;
+    return 5;
     ";
 
         let lexer = scanner::Scanner::new(input);
@@ -502,7 +502,7 @@ mod tests {
 
     #[test]
     fn test_identifier_expression() {
-        let input = "foobar ;";
+        let input = "foobar;";
 
         let lexer = scanner::Scanner::new(input);
         let mut parser = Parser::new(lexer);
@@ -527,7 +527,7 @@ mod tests {
 
     #[test]
     fn test_integer_literal() {
-        let input = "5 ;";
+        let input = "5;";
 
         let lexer = scanner::Scanner::new(input);
         let mut parser = Parser::new(lexer);
@@ -560,12 +560,12 @@ mod tests {
 
         let test_cases = vec![
             PrefixTestcase {
-                input: "!5 ;".to_owned(),
+                input: "!5;".to_owned(),
                 operator: Token::Exclamation,
                 value: 5,
             },
             PrefixTestcase {
-                input: "-15 ;".to_owned(),
+                input: "-15;".to_owned(),
                 operator: Token::Minus,
                 value: 15,
             },
@@ -609,49 +609,49 @@ mod tests {
 
         let test_cases = vec![
             InfixTestcase {
-                input: "5 + 5 ;".to_owned(),
+                input: "5 + 5;".to_owned(),
                 operator: Token::Plus,
                 lhs: 5,
                 rhs: 5,
             },
             InfixTestcase {
-                input: "5 - 5 ;".to_owned(),
+                input: "5 - 5;".to_owned(),
                 operator: Token::Minus,
                 lhs: 5,
                 rhs: 5,
             },
             InfixTestcase {
-                input: "5 * 5 ;".to_owned(),
+                input: "5 * 5;".to_owned(),
                 operator: Token::Asterisk,
                 lhs: 5,
                 rhs: 5,
             },
             InfixTestcase {
-                input: "5 / 5 ;".to_owned(),
+                input: "5 / 5;".to_owned(),
                 operator: Token::Slash,
                 lhs: 5,
                 rhs: 5,
             },
             InfixTestcase {
-                input: "5 > 5 ;".to_owned(),
+                input: "5 > 5;".to_owned(),
                 operator: Token::GreaterThan,
                 lhs: 5,
                 rhs: 5,
             },
             InfixTestcase {
-                input: "5 < 5 ;".to_owned(),
+                input: "5 < 5;".to_owned(),
                 operator: Token::LessThan,
                 lhs: 5,
                 rhs: 5,
             },
             InfixTestcase {
-                input: "5 != 5 ;".to_owned(),
+                input: "5 != 5;".to_owned(),
                 operator: Token::NEquals,
                 lhs: 5,
                 rhs: 5,
             },
             InfixTestcase {
-                input: "5 == 5 ;".to_owned(),
+                input: "5 == 5;".to_owned(),
                 operator: Token::Equals,
                 lhs: 5,
                 rhs: 5,
@@ -695,11 +695,11 @@ mod tests {
 
         let test_cases = vec![
             BooleanTestcase {
-                input: "true ;".to_owned(),
+                input: "true;".to_owned(),
                 expected_val: true,
             },
             BooleanTestcase {
-                input: "true ;".to_owned(),
+                input: "true;".to_owned(),
                 expected_val: true,
             },
         ];

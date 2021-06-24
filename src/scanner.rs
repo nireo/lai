@@ -97,27 +97,26 @@ impl Scanner {
         self.read_pos += 1;
     }
 
-    fn read_identifier(&mut self) -> String {
-        let start_pos: usize = self.pos;
-        loop {
-            match self.ch {
-                b'a'..=b'z' | b'A'..=b'Z' | b'_' => self.read_char(),
-                _ => break,
-            }
+    fn read_number(&mut self) -> String {
+        let position = self.pos;
+
+        while b'0' <= self.ch && self.ch <= b'9' {
+            self.read_char();
         }
 
-        std::str::from_utf8(&self.input.as_bytes()[start_pos..self.pos])
+        std::str::from_utf8(&self.input.as_bytes()[position..self.pos])
             .unwrap()
             .to_string()
     }
 
-    fn read_number(&mut self) -> String {
-        let start_pos: usize = self.pos;
-        loop {
-            match self.ch {
-                b'0'..=b'9' => self.read_char(),
-                _ => break,
-            }
+    fn read_identifier(&mut self) -> String {
+        let start_pos = self.pos;
+
+        while (b'a' <= self.ch && self.ch <= b'z')
+            || (b'A' <= self.ch && self.ch <= b'Z')
+            || self.ch == b'_'
+        {
+            self.read_char();
         }
 
         std::str::from_utf8(&self.input.as_bytes()[start_pos..self.pos])
@@ -174,15 +173,12 @@ impl Scanner {
             b'.' => Token::Dot,
             b'<' => Token::LessThan,
             b'>' => Token::GreaterThan,
+            0 => Token::EOF,
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 let keyword = self.read_identifier();
                 return self.check_if_keyword(&keyword);
             }
-            b'0'..=b'9' => {
-                let num = self.read_number();
-                Token::Number(num)
-            }
-            0 => Token::EOF,
+            b'0'..=b'9' => return Token::Number(self.read_number()),
             _ => Token::Illegal,
         };
 
@@ -285,6 +281,20 @@ mod tests {
             Token::Semicolon,
             Token::EOF,
         ];
+
+        for expected_token in expected.iter() {
+            let actual_token = lexer.next_token();
+            assert_eq!(*expected_token, actual_token);
+        }
+    }
+
+    #[test]
+    fn semicolon_weirdbug() {
+        let input = "10;";
+
+        let mut lexer = Scanner::new(input);
+
+        let expected = vec![Token::Number("10".to_owned()), Token::Semicolon, Token::EOF];
 
         for expected_token in expected.iter() {
             let actual_token = lexer.next_token();
