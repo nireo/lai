@@ -67,29 +67,21 @@ impl Parser {
         let assigment_type = self.current_token.clone();
 
         self.next_token();
-        match &self.current_token {
-            Token::Identifier(_) => {}
-            _ => return None,
-        }
-
         let name: String = match &self.current_token {
             Token::Identifier(value) => value.to_owned().clone(),
             _ => return None,
         };
 
+        if self.peek_token != Token::Assign {
+            return None;
+        }
+        self.next_token();
         self.next_token();
 
-        match &self.current_token {
-            Token::Assign => {}
-            _ => return None,
-        }
-
-        while self.current_token != Token::Semicolon {
-            self.next_token();
-        }
+        let assigment_value = self.parse_expression(Precedence::Lowest)?;
 
         return Some(ast::Statement::Assigment(ast::AssigmentNode {
-            value: ast::Expression::NonExisting,
+            value: assigment_value,
             variable_type: assigment_type,
             name,
         }));
@@ -98,12 +90,14 @@ impl Parser {
     fn parse_return_statement(&mut self) -> Option<ast::Statement> {
         self.next_token();
 
-        while self.current_token != Token::Semicolon {
+        let return_value = self.parse_expression(Precedence::Lowest)?;
+
+        if self.peek_token == Token::Semicolon {
             self.next_token();
         }
 
         return Some(ast::Statement::Return(ast::ReturnNode {
-            value: ast::Expression::NonExisting,
+            value: return_value,
         }));
     }
 
@@ -912,7 +906,7 @@ mod tests {
 
     #[test]
     fn call_expressions() {
-        let input = "equals(true, false);";
+        let input = "equals(true, 1 + 124);";
         let lexer = scanner::Scanner::new(&input);
         let mut parser = Parser::new(lexer);
 
