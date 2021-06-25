@@ -11,6 +11,7 @@ pub enum Token {
     Illegal,
     Identifier(String),
     Number(String),
+    StringValue(String), // the other string is the typename
     Void,
     True,
     False,
@@ -28,6 +29,7 @@ pub enum Token {
     Dot,
     Exclamation,
     Arrow,
+    QuatationMark,
 
     // equality tokens
     Equals,
@@ -124,6 +126,26 @@ impl Scanner {
             .to_string()
     }
 
+    fn read_string_value(&mut self) -> String {
+        let position = self.pos;
+
+        // skip the "
+        self.read_char();
+
+        loop {
+            match self.ch {
+                b'"' | 0 => {
+                    let value = self.input[position + 1..self.pos].to_string();
+                    self.read_char();
+                    return value.to_string();
+                }
+                _ => {
+                    self.read_char();
+                }
+            }
+        }
+    }
+
     fn skip_whitespace(&mut self) {
         while self.ch == b' ' || self.ch == b'\t' || self.ch == b'\n' || self.ch == b'\r' {
             self.read_char()
@@ -162,6 +184,7 @@ impl Scanner {
             }
             b'/' => Token::Slash,
             b'%' => Token::Modulo,
+            b'"' => return Token::StringValue(self.read_string_value()),
             b'[' => Token::LBracket,
             b']' => Token::RBracket,
             b'{' => Token::LBrace,
@@ -295,6 +318,24 @@ mod tests {
         let mut lexer = Scanner::new(input);
 
         let expected = vec![Token::Number("10".to_owned()), Token::Semicolon, Token::EOF];
+
+        for expected_token in expected.iter() {
+            let actual_token = lexer.next_token();
+            assert_eq!(*expected_token, actual_token);
+        }
+    }
+
+    #[test]
+    fn test_string_literal() {
+        let input = "\"hello world\";";
+
+        let mut lexer = Scanner::new(input);
+
+        let expected = vec![
+            Token::StringValue("hello world".to_owned()),
+            Token::Semicolon,
+            Token::EOF,
+        ];
 
         for expected_token in expected.iter() {
             let actual_token = lexer.next_token();

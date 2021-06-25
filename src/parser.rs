@@ -130,6 +130,7 @@ impl Parser {
         match tok {
             Token::Identifier(_) => self.parse_identifier(),
             Token::Number(_) => self.parse_integer_literal(),
+            Token::StringValue(_) => self.parse_string_literal(),
             Token::Exclamation | Token::Minus => self.parse_prefix_expression(),
             Token::True | Token::False => self.parse_boolean_literal(),
 
@@ -362,6 +363,15 @@ impl Parser {
         };
 
         Some(ast::Expression::Integer(ast::IntegerNode { value }))
+    }
+
+    fn parse_string_literal(&self) -> Option<ast::Expression> {
+        let value: String = match &self.current_token {
+            Token::StringValue(value) => value.clone(),
+            _ => return None,
+        };
+
+        Some(ast::Expression::String(ast::StringNode { value }))
     }
 
     // !<expr> -<expr>
@@ -917,6 +927,31 @@ mod tests {
             ast::Statement::Expression(val) => {
                 let to_return = match &val.value {
                     ast::Expression::FunctionCall(exp) => exp.args.len() == 2,
+                    _ => false,
+                };
+
+                to_return
+            }
+            _ => false,
+        };
+
+        assert!(is_correct_type);
+    }
+
+    #[test]
+    fn string_literal() {
+        let input = "\"hello world\";";
+
+        let lexer = scanner::Scanner::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let root_node = parser.parse_root_node();
+        assert_eq!(root_node.statements.len(), 1);
+
+        let is_correct_type = match &root_node.statements[0] {
+            ast::Statement::Expression(val) => {
+                let to_return = match &val.value {
+                    ast::Expression::String(node) => node.value == "hello world",
                     _ => false,
                 };
 

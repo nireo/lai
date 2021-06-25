@@ -17,9 +17,6 @@ pub enum Expression {
     Infix(InfixExpression),
     If(IfNode),
     FunctionParam(FunctionParamNode),
-
-    // this is for testing when something doesn't compile without struct member
-    NonExisting,
 }
 
 #[derive(Debug)]
