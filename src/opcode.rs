@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-const OP_CONSTANT: u8 = 0;
+pub const OP_CONSTANT: u8 = 0;
 
 pub struct Inst(pub Vec<u8>);
 
@@ -49,16 +49,19 @@ impl InstMaker {
         Some(Inst(inst))
     }
 
-    pub fn read_operand(operand_width: usize, insts: &Inst) -> usize {
+    pub fn read_operand(&self, operand_width: usize, insts: &[u8]) -> (usize, usize) {
         let mut offset = 0;
 
-        match operand_width {
+        let res = match operand_width {
             2 => {
                 // this is so fucking bad
-                (((insts.0[0] as u16) << 8) | insts.0[1] as u16) as usize
+                (((insts[0] as u16) << 8) | insts[1] as u16) as usize
             }
             _ => 0,
-        }
+        };
+        offset += operand_width;
+
+        (res, offset)
     }
 }
 
@@ -91,6 +94,37 @@ mod tests {
             for (i, byte) in tt.expected_insts.iter().enumerate() {
                 assert_eq!(inst.0[i], byte.to_owned());
             }
+        }
+    }
+
+    #[test]
+    fn test_read_operand() {
+        struct ReadOperandTestcase {
+            pub op: u8,
+            pub operand: usize,
+            pub bytes_read: usize,
+        }
+
+        let tests = vec![ReadOperandTestcase {
+            op: OP_CONSTANT,
+            operand: 65535,
+            bytes_read: 2,
+        }];
+
+        let inst_maker = InstMaker::default();
+        for tt in tests.iter() {
+            let inst = inst_maker.make(tt.op, tt.operand);
+            assert!(!inst.is_none());
+
+            let inst = inst.unwrap();
+
+            let def = inst_maker.table.look_up(&tt.op);
+            assert!(!def.is_none());
+            let def = def.unwrap();
+
+            let res = inst_maker.read_operand(def.to_owned(), &inst.0[1..]);
+            assert_eq!(tt.bytes_read, res.1);
+            assert_eq!(tt.operand, res.0);
         }
     }
 }

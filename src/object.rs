@@ -8,6 +8,12 @@ pub struct ValueObj<T> {
     pub value: T,
 }
 
+impl<T> ValueObj<T> {
+    pub fn new(value: T) -> Self {
+        Self { value }
+    }
+}
+
 pub struct FunctionObject {
     pub params: Vec<FunctionParamNode>,
     pub body: ast::BlockNode,
