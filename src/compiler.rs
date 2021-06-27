@@ -147,7 +147,7 @@ mod test {
             assert!(!res.is_none());
 
             let consts = compiler.get_consts().to_owned();
-            test_constants(tt.expected_consts.clone(), consts);
+            test_constants(tt.expected_consts.clone(), &consts);
 
             let insts = compiler.get_insts().to_owned();
             test_instructions(&tt.expected_insts, Inst(insts.0.clone()));
