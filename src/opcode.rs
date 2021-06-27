@@ -1,76 +1,44 @@
-use std::collections::HashMap;
-
 pub const OP_CONSTANT: u8 = 0;
 pub const OP_ADD: u8 = 1;
 
 pub struct Inst(pub Vec<u8>);
 
-// definitions maps the opcode into their respective opranrd widths.
-pub struct Definitions {
-    pub defs: HashMap<u8, usize>,
-}
-
-impl Definitions {
-    pub fn default() -> Self {
-        let mut table = Self {
-            defs: HashMap::new(),
-        };
-        // insert the definitions for the different op codes.
-        table.defs.insert(OP_CONSTANT, 2);
-        table.defs.insert(OP_CONSTANT, 0);
-
-        table
-    }
-
-    pub fn look_up(&self, opcode: &u8) -> Option<&usize> {
-        self.defs.get(opcode)
+// we could use a hashmap but this allows us not to have global variables, and different
+// crates to allow construction of hashmaps before runtime.
+fn get_definition(opcode: u8) -> usize {
+    match opcode {
+        OP_CONSTANT => 2,
+        OP_ADD => 0,
+        _ => u8::max_value as usize,
     }
 }
 
-pub struct InstMaker {
-    pub table: Definitions,
+pub fn make(opcode: u8, operand: usize) -> Option<Inst> {
+    let wanted_width = get_definition(opcode);
+    let mut inst: Vec<u8> = vec![0_u8; 1];
+    inst[0] = opcode;
+
+    match wanted_width {
+        2 => inst.extend_from_slice(&(operand as u16).to_be_bytes()),
+        _ => return None,
+    };
+
+    Some(Inst(inst))
 }
 
-impl InstMaker {
-    pub fn default() -> Self {
-        Self {
-            table: Definitions::default(),
+pub fn read_operand(operand_width: usize, insts: &[u8]) -> (usize, usize) {
+    let mut offset = 0;
+
+    let res = match operand_width {
+        2 => {
+            // this is so fucking bad
+            (((insts[0] as u16) << 8) | insts[1] as u16) as usize
         }
-    }
+        _ => 0,
+    };
+    offset += operand_width;
 
-    pub fn make(&self, opcode: u8, operand: usize) -> Option<Inst> {
-        let wanted_width = self.table.look_up(&opcode)?;
-        let mut inst: Vec<u8> = vec![0_u8; 1];
-        inst[0] = opcode;
-
-        match wanted_width {
-            2 => inst.extend_from_slice(&(operand as u16).to_be_bytes()),
-            _ => return None,
-        };
-
-        Some(Inst(inst))
-    }
-
-    pub fn read_operand(&self, operand_width: usize, insts: &[u8]) -> (usize, usize) {
-        let mut offset = 0;
-
-        let res = match operand_width {
-            2 => {
-                // this is so fucking bad
-                (((insts[0] as u16) << 8) | insts[1] as u16) as usize
-            }
-            _ => 0,
-        };
-        offset += operand_width;
-
-        (res, offset)
-    }
-
-    // takes in a slice starting from a given position thats why it
-    // just looks over the first and second indices.
-    pub fn read_u16(insts: &[u8]) -> u16 {
-        ((insts[0] as u16) << 8) | insts[1] as u16
-    }
+    (res, offset)
 }
 
 // takes in a slice starting from a given position thats why it
@@ -97,9 +65,8 @@ mod tests {
             expected_insts: vec![OP_CONSTANT, 255, 254],
         }];
 
-        let inst_maker = InstMaker::default();
         for tt in expected.iter() {
-            let inst = inst_maker.make(tt.op, tt.operand);
+            let inst = make(tt.op, tt.operand);
             assert!(!inst.is_none());
 
             let inst = inst.unwrap();
@@ -125,18 +92,15 @@ mod tests {
             bytes_read: 2,
         }];
 
-        let inst_maker = InstMaker::default();
         for tt in tests.iter() {
-            let inst = inst_maker.make(tt.op, tt.operand);
+            let inst = make(tt.op, tt.operand);
             assert!(!inst.is_none());
 
             let inst = inst.unwrap();
 
-            let def = inst_maker.table.look_up(&tt.op);
-            assert!(!def.is_none());
-            let def = def.unwrap();
+            let def = get_definition(tt.op);
 
-            let res = inst_maker.read_operand(def.to_owned(), &inst.0[1..]);
+            let res = read_operand(def.to_owned(), &inst.0[1..]);
             assert_eq!(tt.bytes_read, res.1);
             assert_eq!(tt.operand, res.0);
         }

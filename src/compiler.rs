@@ -1,13 +1,12 @@
 use crate::{
     ast,
     object::{self, ValueObj},
-    opcode::{Inst, InstMaker, OP_CONSTANT},
+    opcode::{make, Inst, OP_CONSTANT},
 };
 
 pub struct Compiler {
     pub insts: Inst,
     pub consts: Vec<object::Object>,
-    pub inst_maker: InstMaker,
 }
 
 impl Compiler {
@@ -15,7 +14,6 @@ impl Compiler {
         Self {
             consts: Vec::new(),
             insts: Inst(Vec::new()),
-            inst_maker: InstMaker::default(),
         }
     }
 
@@ -67,7 +65,7 @@ impl Compiler {
     }
 
     fn emit(&mut self, op: u8, operand: usize) -> usize {
-        let inst = self.inst_maker.make(op, operand).unwrap();
+        let inst = make(op, operand).unwrap();
         let pos = self.add_inst(&inst.0);
 
         pos
@@ -156,14 +154,10 @@ mod test {
 
     #[test]
     fn test_integer_arithmetic() {
-        let inst_maker = InstMaker::default();
         let tests = vec![CompilerTestcase {
             input: "1 + 2;".to_owned(),
             expected_consts: vec![1, 2],
-            expected_insts: vec![
-                inst_maker.make(OP_CONSTANT, 0).unwrap(),
-                inst_maker.make(OP_CONSTANT, 1).unwrap(),
-            ],
+            expected_insts: vec![make(OP_CONSTANT, 0).unwrap(), make(OP_CONSTANT, 1).unwrap()],
         }];
 
         run_compiler_test(tests);
