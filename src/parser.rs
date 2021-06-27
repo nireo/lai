@@ -2,8 +2,7 @@ use crate::ast;
 pub use crate::scanner::*;
 
 pub struct Parser {
-    pub lexer: Scanner,
-
+    lexer: Scanner,
     current_token: Token,
     peek_token: Token,
 }

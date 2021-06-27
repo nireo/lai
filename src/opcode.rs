@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 pub const OP_CONSTANT: u8 = 0;
+pub const OP_ADD: u8 = 1;
 
 pub struct Inst(pub Vec<u8>);
 
@@ -16,6 +17,7 @@ impl Definitions {
         };
         // insert the definitions for the different op codes.
         table.defs.insert(OP_CONSTANT, 2);
+        table.defs.insert(OP_CONSTANT, 0);
 
         table
     }
@@ -63,6 +65,18 @@ impl InstMaker {
 
         (res, offset)
     }
+
+    // takes in a slice starting from a given position thats why it
+    // just looks over the first and second indices.
+    pub fn read_u16(insts: &[u8]) -> u16 {
+        ((insts[0] as u16) << 8) | insts[1] as u16
+    }
+}
+
+// takes in a slice starting from a given position thats why it
+// just looks over the first and second indices.
+pub fn read_u16(insts: &[u8]) -> u16 {
+    ((insts[0] as u16) << 8) | insts[1] as u16
 }
 
 #[cfg(test)]
