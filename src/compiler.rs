@@ -80,3 +80,92 @@ impl Compiler {
         pos_new_inst
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{parser, scanner};
+    use std::any::Any;
+    struct CompilerTestcase<T> {
+        input: String,
+        expected_consts: Vec<T>,
+        expected_insts: Vec<Inst>,
+    }
+
+    fn parse_program(input: &str) -> ast::Node {
+        let lexer = scanner::Scanner::new(input);
+        let mut parser = parser::Parser::new(lexer);
+
+        let root_node = parser.parse_root_node();
+
+        ast::Node::Root(Box::new(root_node))
+    }
+
+    fn concat_instructions(instructions: &[Inst]) -> Inst {
+        let mut out: Vec<u8> = Vec::new();
+
+        for inst in instructions.iter() {
+            out.extend_from_slice(&inst.0);
+        }
+
+        return Inst(out);
+    }
+
+    fn test_instructions(expected: &[Inst], actual: Inst) {
+        let concatted = concat_instructions(expected);
+        assert_eq!(concatted.0.len(), actual.0.len());
+
+        for (i, ins) in concatted.0.iter().enumerate() {
+            assert_eq!(actual.0[i], ins.to_owned());
+        }
+    }
+
+    fn test_constants<T: Any + 'static>(expected: Vec<T>, actual: &[object::Object]) {
+        assert_eq!(expected.len(), actual.len());
+
+        for (i, cnst) in expected.iter().enumerate() {
+            match &actual[i] {
+                object::Object::Integer(val) => {
+                    let value_any = cnst as &dyn Any;
+
+                    match value_any.downcast_ref::<i32>() {
+                        Some(as_i32) => assert!(as_i32.to_owned() == val.value),
+                        _ => assert!(false),
+                    }
+                }
+                _ => assert!(false), // XD
+            };
+        }
+    }
+
+    fn run_compiler_test<T: 'static + Clone>(tests: Vec<CompilerTestcase<T>>) {
+        for tt in tests.iter() {
+            let root_node = parse_program(&tt.input);
+
+            let mut compiler = Compiler::new();
+            let res = compiler.compile(root_node);
+            assert!(!res.is_none());
+
+            let consts = compiler.get_consts().to_owned();
+            test_constants(tt.expected_consts.clone(), consts);
+
+            let insts = compiler.get_insts().to_owned();
+            test_instructions(&tt.expected_insts, Inst(insts.0.clone()));
+        }
+    }
+
+    #[test]
+    fn test_integer_arithmetic() {
+        let inst_maker = InstMaker::default();
+        let tests = vec![CompilerTestcase {
+            input: "1 + 2;".to_owned(),
+            expected_consts: vec![1, 2],
+            expected_insts: vec![
+                inst_maker.make(OP_CONSTANT, 0).unwrap(),
+                inst_maker.make(OP_CONSTANT, 1).unwrap(),
+            ],
+        }];
+
+        run_compiler_test(tests);
+    }
+}
