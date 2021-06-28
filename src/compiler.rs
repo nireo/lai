@@ -1,7 +1,8 @@
 use crate::{
     ast,
     object::{self, ValueObj},
-    opcode::{make, Inst, OP_CONSTANT},
+    opcode::{make, make_simple, Inst, OP_ADD, OP_CONSTANT},
+    scanner::Token,
 };
 
 pub struct Compiler {
@@ -45,6 +46,11 @@ impl Compiler {
                     self.compile(ast::Node::Expression(e.lhs))?;
                     self.compile(ast::Node::Expression(e.rhs))?;
 
+                    match e.operator {
+                        Token::Plus => self.emit_single(OP_ADD),
+                        _ => return None, // non recognized/supported operator
+                    };
+
                     Some(())
                 }
                 ast::Expression::Integer(e) => {
@@ -71,6 +77,13 @@ impl Compiler {
         pos
     }
 
+    fn emit_single(&mut self, op: u8) -> usize {
+        let inst = make_simple(op);
+        let pos = self.add_inst(&inst.0);
+
+        pos
+    }
+
     fn add_inst(&mut self, ins: &[u8]) -> usize {
         let pos_new_inst = self.insts.0.len();
         self.insts.0.extend_from_slice(ins);
@@ -82,7 +95,10 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{parser, scanner};
+    use crate::{
+        opcode::{make_simple, OP_ADD},
+        parser, scanner,
+    };
     use std::any::Any;
     struct CompilerTestcase<T> {
         input: String,
@@ -157,7 +173,11 @@ mod test {
         let tests = vec![CompilerTestcase {
             input: "1 + 2;".to_owned(),
             expected_consts: vec![1, 2],
-            expected_insts: vec![make(OP_CONSTANT, 0).unwrap(), make(OP_CONSTANT, 1).unwrap()],
+            expected_insts: vec![
+                make(OP_CONSTANT, 0).unwrap(),
+                make(OP_CONSTANT, 1).unwrap(),
+                make_simple(OP_ADD),
+            ],
         }];
 
         run_compiler_test(tests);

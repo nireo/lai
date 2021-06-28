@@ -20,10 +20,16 @@ pub fn make(opcode: u8, operand: usize) -> Option<Inst> {
 
     match wanted_width {
         2 => inst.extend_from_slice(&(operand as u16).to_be_bytes()),
+        0 => return Some(Inst(inst)),
         _ => return None,
     };
 
     Some(Inst(inst))
+}
+
+pub fn make_simple(opcode: u8) -> Inst {
+    let inst = vec![opcode; 1];
+    Inst(inst)
 }
 
 pub fn read_operand(operand_width: usize, insts: &[u8]) -> (usize, usize) {

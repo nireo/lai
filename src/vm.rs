@@ -1,6 +1,6 @@
 use crate::{
     object,
-    opcode::{self, Inst, OP_CONSTANT},
+    opcode::{Inst, OP_ADD, OP_CONSTANT},
 };
 
 const STACK_SIZE: usize = 2048;
@@ -9,24 +9,22 @@ pub struct VM {
     pub constants: Vec<object::Object>,
     pub insts: Inst,
     pub stack: Vec<object::Object>,
-    pub sp: usize,
 }
 
 impl VM {
     pub fn new(constants: Vec<object::Object>, insts: Inst) -> Self {
         Self {
-            sp: 0,
-            stack: vec![object::Object::Null; STACK_SIZE],
+            stack: Vec::new(),
             constants,
             insts,
         }
     }
 
-    pub fn stack_top(&self) -> Option<&object::Object> {
-        if self.sp == 0 {
+    pub fn stack_top(&self) -> Option<object::Object> {
+        if self.stack.len() == 0 {
             None
         } else {
-            Some(&self.stack[self.sp - 1])
+            Some(self.stack[self.stack.len() - 1].clone())
         }
     }
 
@@ -35,10 +33,30 @@ impl VM {
         while ip < self.insts.0.len() {
             match self.insts.0[ip] {
                 OP_CONSTANT => {
-                    let const_index = opcode::read_u16(&self.insts.0[1..]) as usize;
-                    ip += 2;
-
+                    let const_index =
+                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
                     self.push(self.constants[const_index].clone())?;
+                    ip += 3;
+                }
+                OP_ADD => {
+                    let left_obj = self.pop()?;
+                    let right_obj = self.pop()?;
+
+                    let left_value = match &left_obj {
+                        object::Object::Integer(value) => value.value,
+                        _ => return None,
+                    };
+
+                    let right_value = match &right_obj {
+                        object::Object::Integer(value) => value.value,
+                        _ => return None,
+                    };
+
+                    self.push(object::Object::Integer(object::ValueObj::new(
+                        left_value + right_value,
+                    )))?;
+
+                    ip += 1;
                 }
                 _ => return None,
             };
@@ -48,13 +66,21 @@ impl VM {
     }
 
     fn push(&mut self, obj: object::Object) -> Option<()> {
-        if self.sp >= STACK_SIZE {
+        if self.stack.len() >= STACK_SIZE {
+            // stack overflow
             None
         } else {
-            self.stack[self.sp] = obj;
-            self.sp += 1;
-
+            self.stack.push(obj);
             Some(())
+        }
+    }
+
+    fn pop(&mut self) -> Option<object::Object> {
+        if self.stack.len() == 0 {
+            // stack empty
+            None
+        } else {
+            Some(self.stack.pop().unwrap())
         }
     }
 }
@@ -88,6 +114,7 @@ mod test {
             assert!(!res.is_none());
 
             let mut vm = VM::new(compiler.consts, compiler.insts);
+
             let res = vm.run();
             assert!(!res.is_none());
 
@@ -95,7 +122,7 @@ mod test {
             assert!(!res.is_none());
             let top = res.unwrap();
 
-            test_expected_object(top, tt.expected.clone());
+            test_expected_object(&top, tt.expected.clone());
         }
     }
 
@@ -130,7 +157,7 @@ mod test {
             },
             VmTestcase {
                 input: "1 + 2;".to_owned(),
-                expected: 2,
+                expected: 3,
             },
         ];
 
