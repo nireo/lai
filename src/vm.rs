@@ -3,12 +3,12 @@ use crate::{
     opcode::{Inst, OP_ADD, OP_CONSTANT},
 };
 
-const STACK_SIZE: usize = 2048;
+static STACK_SIZE: usize = 2048;
 
 pub struct VM {
-    pub constants: Vec<object::Object>,
-    pub insts: Inst,
-    pub stack: Vec<object::Object>,
+    constants: Vec<object::Object>,
+    insts: Inst,
+    stack: Vec<object::Object>,
 }
 
 impl VM {
@@ -36,7 +36,7 @@ impl VM {
                     let const_index =
                         u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
                     self.push(self.constants[const_index].clone())?;
-                    ip += 3;
+                    ip += 2;
                 }
                 OP_ADD => {
                     let left_obj = self.pop()?;
@@ -55,11 +55,11 @@ impl VM {
                     self.push(object::Object::Integer(object::ValueObj::new(
                         left_value + right_value,
                     )))?;
-
-                    ip += 1;
                 }
                 _ => return None,
             };
+
+            ip += 1;
         }
 
         Some(())
