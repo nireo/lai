@@ -1,7 +1,10 @@
 use crate::{
     ast,
     object::{self, ValueObj},
-    opcode::{make, make_simple, Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_MUL, OP_POP, OP_SUB},
+    opcode::{
+        make, make_simple, Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_FALSE, OP_MUL, OP_POP, OP_SUB,
+        OP_TRUE,
+    },
     scanner::Token,
 };
 
@@ -65,6 +68,15 @@ impl Compiler {
 
                     Some(())
                 }
+                ast::Expression::Boolean(e) => {
+                    if e.value {
+                        self.emit_single(OP_TRUE);
+                    } else {
+                        self.emit_single(OP_FALSE);
+                    }
+
+                    Some(())
+                }
                 _ => None,
             },
         }
@@ -101,7 +113,7 @@ impl Compiler {
 mod test {
     use super::*;
     use crate::{
-        opcode::{make_simple, OP_ADD},
+        opcode::{make_simple, OP_ADD, OP_FALSE, OP_TRUE},
         parser, scanner,
     };
     use std::any::Any;
@@ -215,6 +227,24 @@ mod test {
                     make_simple(OP_DIV),
                     make_simple(OP_POP),
                 ],
+            },
+        ];
+
+        run_compiler_test(tests);
+    }
+
+    #[test]
+    fn test_boolean_expressions() {
+        let tests: Vec<CompilerTestcase<i32>> = vec![
+            CompilerTestcase {
+                input: "true".to_owned(),
+                expected_consts: vec![],
+                expected_insts: vec![make_simple(OP_TRUE), make_simple(OP_POP)],
+            },
+            CompilerTestcase {
+                input: "false".to_owned(),
+                expected_consts: vec![],
+                expected_insts: vec![make_simple(OP_FALSE), make_simple(OP_POP)],
             },
         ];
 

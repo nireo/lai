@@ -1,6 +1,6 @@
 use crate::{
     object,
-    opcode::{Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_MUL, OP_POP, OP_SUB},
+    opcode::{Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_FALSE, OP_MUL, OP_POP, OP_SUB, OP_TRUE},
 };
 
 static STACK_SIZE: usize = 2048;
@@ -49,6 +49,11 @@ impl VM {
                 }
                 OP_POP => {
                     self.last = self.pop()?;
+                }
+                OP_TRUE | OP_FALSE => {
+                    self.push(object::Object::Bool(object::ValueObj::new(
+                        self.insts.0[ip] == OP_TRUE,
+                    )))?;
                 }
                 _ => return None,
             };
@@ -160,6 +165,18 @@ mod test {
                     _ => assert!(false),
                 }
             }
+            object::Object::Bool(val) => {
+                let value_any = &expected as &dyn Any;
+
+                match value_any.downcast_ref::<bool>() {
+                    Some(as_bool) => {
+                        println!("{}", as_bool.to_owned());
+                        println!("{}", val.value);
+                        assert!(as_bool.to_owned() == val.value);
+                    }
+                    _ => assert!(false),
+                }
+            }
             _ => assert!(false), // XD
         };
     }
@@ -198,6 +215,22 @@ mod test {
             VmTestcase {
                 input: "50 / 2 * 2 + 10 - 5".to_owned(),
                 expected: 55,
+            },
+        ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_boolean_arithmetic() {
+        let tests = vec![
+            VmTestcase {
+                input: "true".to_owned(),
+                expected: true,
+            },
+            VmTestcase {
+                input: "false".to_owned(),
+                expected: false,
             },
         ];
 

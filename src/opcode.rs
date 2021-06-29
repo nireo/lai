@@ -4,6 +4,8 @@ pub const OP_POP: u8 = 2;
 pub const OP_SUB: u8 = 3;
 pub const OP_MUL: u8 = 4;
 pub const OP_DIV: u8 = 5;
+pub const OP_TRUE: u8 = 6;
+pub const OP_FALSE: u8 = 7;
 
 pub struct Inst(pub Vec<u8>);
 
