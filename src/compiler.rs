@@ -2,8 +2,8 @@ use crate::{
     ast,
     object::{self, ValueObj},
     opcode::{
-        make, make_simple, Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_FALSE, OP_MUL, OP_POP, OP_SUB,
-        OP_TRUE,
+        make, make_simple, Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT, OP_MUL,
+        OP_NE, OP_POP, OP_SUB, OP_TRUE,
     },
     scanner::Token,
 };
@@ -48,17 +48,26 @@ impl Compiler {
             },
             ast::Node::Expression(exp) => match *exp {
                 ast::Expression::Infix(e) => {
-                    self.compile(ast::Node::Expression(e.lhs))?;
-                    self.compile(ast::Node::Expression(e.rhs))?;
+                    if e.operator == Token::LessThan {
+                        self.compile(ast::Node::Expression(e.rhs))?;
+                        self.compile(ast::Node::Expression(e.lhs))?;
 
-                    match e.operator {
-                        Token::Plus => self.emit_single(OP_ADD),
-                        Token::Slash => self.emit_single(OP_DIV),
-                        Token::Asterisk => self.emit_single(OP_MUL),
-                        Token::Minus => self.emit_single(OP_SUB),
-                        _ => return None, // non recognized/supported operator
-                    };
+                        self.emit_single(OP_GT);
+                    } else {
+                        self.compile(ast::Node::Expression(e.lhs))?;
+                        self.compile(ast::Node::Expression(e.rhs))?;
 
+                        match e.operator {
+                            Token::Plus => self.emit_single(OP_ADD),
+                            Token::Slash => self.emit_single(OP_DIV),
+                            Token::Asterisk => self.emit_single(OP_MUL),
+                            Token::Minus => self.emit_single(OP_SUB),
+                            Token::GreaterThan => self.emit_single(OP_GT),
+                            Token::Equals => self.emit_single(OP_EQ),
+                            Token::NEquals => self.emit_single(OP_NE),
+                            _ => return None, // non recognized/supported operator
+                        };
+                    }
                     Some(())
                 }
                 ast::Expression::Integer(e) => {
@@ -112,10 +121,7 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        opcode::{make_simple, OP_ADD, OP_FALSE, OP_TRUE},
-        parser, scanner,
-    };
+    use crate::{parser, scanner};
     use std::any::Any;
     struct CompilerTestcase<T> {
         input: String,
@@ -245,6 +251,66 @@ mod test {
                 input: "false".to_owned(),
                 expected_consts: vec![],
                 expected_insts: vec![make_simple(OP_FALSE), make_simple(OP_POP)],
+            },
+            CompilerTestcase {
+                input: "1 > 2".to_owned(),
+                expected_consts: vec![1, 2],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_GT),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "1 < 2".to_owned(),
+                expected_consts: vec![2, 1],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_GT),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "1 == 2".to_owned(),
+                expected_consts: vec![1, 2],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_EQ),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "1 != 2".to_owned(),
+                expected_consts: vec![1, 2],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_NE),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "true == false".to_owned(),
+                expected_consts: vec![],
+                expected_insts: vec![
+                    make_simple(OP_TRUE),
+                    make_simple(OP_FALSE),
+                    make_simple(OP_EQ),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "true != false".to_owned(),
+                expected_consts: vec![],
+                expected_insts: vec![
+                    make_simple(OP_TRUE),
+                    make_simple(OP_FALSE),
+                    make_simple(OP_NE),
+                    make_simple(OP_POP),
+                ],
             },
         ];
 

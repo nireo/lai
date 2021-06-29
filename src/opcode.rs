@@ -6,6 +6,9 @@ pub const OP_MUL: u8 = 4;
 pub const OP_DIV: u8 = 5;
 pub const OP_TRUE: u8 = 6;
 pub const OP_FALSE: u8 = 7;
+pub const OP_EQ: u8 = 8;
+pub const OP_NE: u8 = 9;
+pub const OP_GT: u8 = 10;
 
 pub struct Inst(pub Vec<u8>);
 

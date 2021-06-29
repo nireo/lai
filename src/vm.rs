@@ -1,6 +1,9 @@
 use crate::{
     object,
-    opcode::{Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_FALSE, OP_MUL, OP_POP, OP_SUB, OP_TRUE},
+    opcode::{
+        Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT, OP_MUL, OP_NE, OP_POP, OP_SUB,
+        OP_TRUE,
+    },
 };
 
 static STACK_SIZE: usize = 2048;
@@ -55,6 +58,9 @@ impl VM {
                         self.insts.0[ip] == OP_TRUE,
                     )))?;
                 }
+                OP_EQ | OP_NE | OP_GT => {
+                    self.comparison(self.insts.0[ip].clone())?;
+                }
                 _ => return None,
             };
 
@@ -86,11 +92,39 @@ impl VM {
             _ => return None,
         };
 
-        println!("{} {} {} = {}", left_value, op, right_value, value);
-
         self.push(object::Object::Integer(object::ValueObj::new(value)))?;
 
         Some(())
+    }
+
+    fn comparison(&mut self, op: u8) -> Option<()> {
+        let right_obj = self.pop()?;
+        let left_obj = self.pop()?;
+
+        match &right_obj {
+            object::Object::Bool(rval) => match &left_obj {
+                object::Object::Bool(lval) => {
+                    self.push(object::Object::Bool(object::ValueObj::new(match op {
+                        OP_EQ => rval.value == lval.value,
+                        OP_NE => rval.value != lval.value,
+                        _ => return None,
+                    })))
+                }
+                _ => None,
+            },
+            object::Object::Integer(rval) => match &left_obj {
+                object::Object::Integer(lval) => {
+                    self.push(object::Object::Bool(object::ValueObj::new(match op {
+                        OP_EQ => rval.value == lval.value,
+                        OP_NE => rval.value != lval.value,
+                        OP_GT => lval.value > rval.value,
+                        _ => return None,
+                    })))
+                }
+                _ => None,
+            },
+            _ => Some(()),
+        }
     }
 
     fn push(&mut self, obj: object::Object) -> Option<()> {
@@ -136,6 +170,7 @@ mod test {
     fn run_vm_tests<T: 'static + Clone>(tests: Vec<VmTestcase<T>>) {
         for tt in tests.iter() {
             let root_node = parse_program(&tt.input);
+            println!("{}", tt.input);
 
             let mut compiler = compiler::Compiler::new();
             let res = compiler.compile(root_node);
@@ -158,8 +193,6 @@ mod test {
 
                 match value_any.downcast_ref::<i32>() {
                     Some(as_i32) => {
-                        println!("{}", as_i32.to_owned());
-                        println!("{}", val.value);
                         assert!(as_i32.to_owned() == val.value);
                     }
                     _ => assert!(false),
@@ -170,8 +203,6 @@ mod test {
 
                 match value_any.downcast_ref::<bool>() {
                     Some(as_bool) => {
-                        println!("{}", as_bool.to_owned());
-                        println!("{}", val.value);
                         assert!(as_bool.to_owned() == val.value);
                     }
                     _ => assert!(false),
@@ -230,6 +261,58 @@ mod test {
             },
             VmTestcase {
                 input: "false".to_owned(),
+                expected: false,
+            },
+            VmTestcase {
+                input: "1 < 2".to_owned(),
+                expected: true,
+            },
+            VmTestcase {
+                input: "1 > 2".to_owned(),
+                expected: false,
+            },
+            VmTestcase {
+                input: "1 < 1".to_owned(),
+                expected: false,
+            },
+            VmTestcase {
+                input: "1 > 1".to_owned(),
+                expected: false,
+            },
+            VmTestcase {
+                input: "1 == 1".to_owned(),
+                expected: true,
+            },
+            VmTestcase {
+                input: "1 != 1".to_owned(),
+                expected: false,
+            },
+            VmTestcase {
+                input: "true == true".to_owned(),
+                expected: true,
+            },
+            VmTestcase {
+                input: "false == false".to_owned(),
+                expected: true,
+            },
+            VmTestcase {
+                input: "true == false".to_owned(),
+                expected: false,
+            },
+            VmTestcase {
+                input: "true != false".to_owned(),
+                expected: true,
+            },
+            VmTestcase {
+                input: "false != true".to_owned(),
+                expected: true,
+            },
+            VmTestcase {
+                input: "(1 < 2) == true".to_owned(),
+                expected: true,
+            },
+            VmTestcase {
+                input: "(1 < 2) == false".to_owned(),
                 expected: false,
             },
         ];
