@@ -1,7 +1,7 @@
 use crate::{
     ast,
     object::{self, ValueObj},
-    opcode::{make, make_simple, Inst, OP_ADD, OP_CONSTANT},
+    opcode::{make, make_simple, Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_MUL, OP_POP, OP_SUB},
     scanner::Token,
 };
 
@@ -37,6 +37,8 @@ impl Compiler {
             ast::Node::Statement(st) => match *st {
                 ast::Statement::Expression(exp) => {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
+                    self.emit_single(OP_POP);
+
                     Some(())
                 }
                 _ => None,
@@ -48,6 +50,9 @@ impl Compiler {
 
                     match e.operator {
                         Token::Plus => self.emit_single(OP_ADD),
+                        Token::Slash => self.emit_single(OP_DIV),
+                        Token::Asterisk => self.emit_single(OP_MUL),
+                        Token::Minus => self.emit_single(OP_SUB),
                         _ => return None, // non recognized/supported operator
                     };
 
@@ -170,15 +175,48 @@ mod test {
 
     #[test]
     fn test_integer_arithmetic() {
-        let tests = vec![CompilerTestcase {
-            input: "1 + 2;".to_owned(),
-            expected_consts: vec![1, 2],
-            expected_insts: vec![
-                make(OP_CONSTANT, 0).unwrap(),
-                make(OP_CONSTANT, 1).unwrap(),
-                make_simple(OP_ADD),
-            ],
-        }];
+        let tests = vec![
+            CompilerTestcase {
+                input: "1 + 2;".to_owned(),
+                expected_consts: vec![1, 2],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_ADD),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "1 - 2;".to_owned(),
+                expected_consts: vec![1, 2],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_SUB),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "1 * 2;".to_owned(),
+                expected_consts: vec![1, 2],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_MUL),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "1 / 2;".to_owned(),
+                expected_consts: vec![1, 2],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_DIV),
+                    make_simple(OP_POP),
+                ],
+            },
+        ];
 
         run_compiler_test(tests);
     }

@@ -1,5 +1,9 @@
 pub const OP_CONSTANT: u8 = 0;
 pub const OP_ADD: u8 = 1;
+pub const OP_POP: u8 = 2;
+pub const OP_SUB: u8 = 3;
+pub const OP_MUL: u8 = 4;
+pub const OP_DIV: u8 = 5;
 
 pub struct Inst(pub Vec<u8>);
 
@@ -9,6 +13,10 @@ fn get_definition(opcode: u8) -> usize {
     match opcode {
         OP_CONSTANT => 2,
         OP_ADD => 0,
+        OP_POP => 0,
+        OP_DIV => 0,
+        OP_MUL => 0,
+        OP_SUB => 0,
         _ => u8::max_value as usize,
     }
 }

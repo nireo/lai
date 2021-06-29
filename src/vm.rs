@@ -1,6 +1,6 @@
 use crate::{
     object,
-    opcode::{Inst, OP_ADD, OP_CONSTANT},
+    opcode::{Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_MUL, OP_POP, OP_SUB},
 };
 
 static STACK_SIZE: usize = 2048;
@@ -9,6 +9,7 @@ pub struct VM {
     constants: Vec<object::Object>,
     insts: Inst,
     stack: Vec<object::Object>,
+    last: object::Object,
 }
 
 impl VM {
@@ -17,6 +18,7 @@ impl VM {
             stack: Vec::new(),
             constants,
             insts,
+            last: object::Object::Null,
         }
     }
 
@@ -26,6 +28,10 @@ impl VM {
         } else {
             Some(self.stack[self.stack.len() - 1].clone())
         }
+    }
+
+    pub fn get_last(&self) -> object::Object {
+        self.last.clone()
     }
 
     pub fn run(&mut self) -> Option<()> {
@@ -38,29 +44,46 @@ impl VM {
                     self.push(self.constants[const_index].clone())?;
                     ip += 2;
                 }
-                OP_ADD => {
-                    let left_obj = self.pop()?;
-                    let right_obj = self.pop()?;
-
-                    let left_value = match &left_obj {
-                        object::Object::Integer(value) => value.value,
-                        _ => return None,
-                    };
-
-                    let right_value = match &right_obj {
-                        object::Object::Integer(value) => value.value,
-                        _ => return None,
-                    };
-
-                    self.push(object::Object::Integer(object::ValueObj::new(
-                        left_value + right_value,
-                    )))?;
+                OP_ADD | OP_MUL | OP_SUB | OP_DIV => {
+                    self.bin_operation(self.insts.0[ip].clone())?;
+                }
+                OP_POP => {
+                    self.last = self.pop()?;
                 }
                 _ => return None,
             };
 
             ip += 1;
         }
+
+        Some(())
+    }
+
+    fn bin_operation(&mut self, op: u8) -> Option<()> {
+        let right_obj = self.pop()?;
+        let left_obj = self.pop()?;
+
+        let left_value = match &left_obj {
+            object::Object::Integer(value) => value.value,
+            _ => return None,
+        };
+
+        let right_value = match &right_obj {
+            object::Object::Integer(value) => value.value,
+            _ => return None,
+        };
+
+        let value = match op {
+            OP_MUL => left_value * right_value,
+            OP_SUB => left_value - right_value,
+            OP_DIV => left_value / right_value,
+            OP_ADD => left_value + right_value,
+            _ => return None,
+        };
+
+        println!("{} {} {} = {}", left_value, op, right_value, value);
+
+        self.push(object::Object::Integer(object::ValueObj::new(value)))?;
 
         Some(())
     }
@@ -118,10 +141,7 @@ mod test {
             let res = vm.run();
             assert!(!res.is_none());
 
-            let res = vm.stack_top();
-            assert!(!res.is_none());
-            let top = res.unwrap();
-
+            let top = vm.get_last();
             test_expected_object(&top, tt.expected.clone());
         }
     }
@@ -156,8 +176,28 @@ mod test {
                 expected: 2,
             },
             VmTestcase {
-                input: "1 + 2;".to_owned(),
+                input: "1 + 2".to_owned(),
                 expected: 3,
+            },
+            VmTestcase {
+                input: "1 - 2".to_owned(),
+                expected: -1,
+            },
+            VmTestcase {
+                input: "1 * 2".to_owned(),
+                expected: 2,
+            },
+            VmTestcase {
+                input: "4 / 2".to_owned(),
+                expected: 2,
+            },
+            VmTestcase {
+                input: "5 + 5 + 5 + 5 - 10".to_owned(),
+                expected: 10,
+            },
+            VmTestcase {
+                input: "50 / 2 * 2 + 10 - 5".to_owned(),
+                expected: 55,
             },
         ];
 
