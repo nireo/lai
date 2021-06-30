@@ -3,14 +3,22 @@ use crate::{
     object::{self, ValueObj},
     opcode::{
         make, make_simple, Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT,
-        OP_MINUS, OP_MUL, OP_NE, OP_POP, OP_SUB, OP_TRUE,
+        OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_POP, OP_SUB, OP_TRUE,
     },
     scanner::Token,
 };
 
+struct EmittedInstruction {
+    opcode: u8,
+    pos: usize,
+}
+
 pub struct Compiler {
     pub insts: Inst,
     pub consts: Vec<object::Object>,
+
+    last_inst: EmittedInstruction,
+    prev_inst: EmittedInstruction,
 }
 
 impl Compiler {
@@ -18,6 +26,9 @@ impl Compiler {
         Self {
             consts: Vec::new(),
             insts: Inst(Vec::new()),
+
+            last_inst: EmittedInstruction { opcode: 0, pos: 0 },
+            prev_inst: EmittedInstruction { opcode: 0, pos: 0 },
         }
     }
 
@@ -44,6 +55,12 @@ impl Compiler {
 
                     Some(())
                 }
+                ast::Statement::Block(exp) => {
+                    for st in exp.statements.iter() {
+                        self.compile(ast::Node::Statement(Box::new(st.clone())))?;
+                    }
+                    Some(())
+                }
                 _ => None,
             },
             ast::Node::Expression(exp) => match *exp {
@@ -68,6 +85,21 @@ impl Compiler {
                             _ => return None, // non recognized/supported operator
                         };
                     }
+                    Some(())
+                }
+                ast::Expression::If(e) => {
+                    self.compile(ast::Node::Expression(e.cond))?;
+                    let not_true_pos = self.emit(OP_JMPNT, 9999);
+
+                    self.compile(ast::Node::Statement(e.after))?;
+
+                    if self.last_instruction_is_pop() {
+                        self.remove_last_pop();
+                    }
+
+                    let after_pos = self.insts.0.len();
+                    self.change_operand(not_true_pos, after_pos);
+
                     Some(())
                 }
                 ast::Expression::Integer(e) => {
@@ -102,14 +134,34 @@ impl Compiler {
         }
     }
 
+    fn set_last_instruction(&mut self, opcode: u8, pos: usize) {
+        let prev = EmittedInstruction {
+            opcode: self.last_inst.opcode,
+            pos: self.last_inst.pos,
+        };
+        let last = EmittedInstruction { opcode, pos };
+
+        self.prev_inst = prev;
+        self.last_inst = last;
+    }
+
     fn add_constant(&mut self, obj: object::Object) -> usize {
         self.consts.push(obj);
         self.consts.len() - 1
     }
 
+    fn change_operand(&mut self, pos: usize, operand: usize) {
+        let op = self.insts.0[pos];
+        let new_inst = make(op, operand).unwrap();
+
+        self.replace_instruction(pos, new_inst.0);
+    }
+
     fn emit(&mut self, op: u8, operand: usize) -> usize {
         let inst = make(op, operand).unwrap();
         let pos = self.add_inst(&inst.0);
+
+        self.set_last_instruction(op, pos);
 
         pos
     }
@@ -118,7 +170,27 @@ impl Compiler {
         let inst = make_simple(op);
         let pos = self.add_inst(&inst.0);
 
+        self.set_last_instruction(op, pos);
+
         pos
+    }
+
+    fn last_instruction_is_pop(&self) -> bool {
+        self.last_inst.opcode == OP_POP
+    }
+
+    fn remove_last_pop(&mut self) {
+        self.insts.0 = self.insts.0[..self.last_inst.pos].to_owned();
+        self.last_inst = EmittedInstruction {
+            opcode: self.prev_inst.opcode,
+            pos: self.prev_inst.pos,
+        };
+    }
+
+    fn replace_instruction(&mut self, pos: usize, insts: Vec<u8>) {
+        for i in 0..insts.len() {
+            self.insts.0[pos + i] = insts[i];
+        }
     }
 
     fn add_inst(&mut self, ins: &[u8]) -> usize {
@@ -132,7 +204,7 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{parser, scanner};
+    use crate::{opcode::OP_JMPNT, parser, scanner};
     use std::any::Any;
     struct CompilerTestcase<T> {
         input: String,
@@ -341,6 +413,24 @@ mod test {
                 ],
             },
         ];
+
+        run_compiler_test(tests);
+    }
+
+    #[test]
+    fn test_conditionals() {
+        let tests = vec![CompilerTestcase {
+            input: "if (true) { 10 }; 3333;".to_owned(),
+            expected_consts: vec![10, 3333],
+            expected_insts: vec![
+                make_simple(OP_TRUE),
+                make(OP_JMPNT, 7).unwrap(),
+                make(OP_CONSTANT, 0).unwrap(),
+                make_simple(OP_POP),
+                make(OP_CONSTANT, 1).unwrap(),
+                make_simple(OP_POP),
+            ],
+        }];
 
         run_compiler_test(tests);
     }

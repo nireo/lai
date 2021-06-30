@@ -28,11 +28,9 @@ fn main() {
         let res = vm.run();
         assert!(!res.is_none());
 
-        let res = vm.stack_top();
-        assert!(!res.is_none());
-        let top = res.unwrap();
+        let res = vm.get_last();
 
-        match &top {
+        match &res {
             object::Object::Integer(val) => println!("{}", val.value),
             object::Object::String(val) => println!("{}", val.value),
             object::Object::Float(val) => println!("{}", val.value),

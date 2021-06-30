@@ -11,6 +11,8 @@ pub const OP_NE: u8 = 9;
 pub const OP_GT: u8 = 10;
 pub const OP_MINUS: u8 = 11;
 pub const OP_BANG: u8 = 12;
+pub const OP_JMPNT: u8 = 13;
+pub const OP_JMP: u8 = 14;
 
 pub struct Inst(pub Vec<u8>);
 
@@ -24,6 +26,15 @@ fn get_definition(opcode: u8) -> usize {
         OP_DIV => 0,
         OP_MUL => 0,
         OP_SUB => 0,
+        OP_TRUE => 0,
+        OP_FALSE => 0,
+        OP_EQ => 0,
+        OP_NE => 0,
+        OP_GT => 0,
+        OP_MINUS => 0,
+        OP_BANG => 0,
+        OP_JMPNT => 2,
+        OP_JMP => 2,
         _ => u8::max_value as usize,
     }
 }
