@@ -9,6 +9,8 @@ pub const OP_FALSE: u8 = 7;
 pub const OP_EQ: u8 = 8;
 pub const OP_NE: u8 = 9;
 pub const OP_GT: u8 = 10;
+pub const OP_MINUS: u8 = 11;
+pub const OP_BANG: u8 = 12;
 
 pub struct Inst(pub Vec<u8>);
 

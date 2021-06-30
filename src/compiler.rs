@@ -2,8 +2,8 @@ use crate::{
     ast,
     object::{self, ValueObj},
     opcode::{
-        make, make_simple, Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT, OP_MUL,
-        OP_NE, OP_POP, OP_SUB, OP_TRUE,
+        make, make_simple, Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT,
+        OP_MINUS, OP_MUL, OP_NE, OP_POP, OP_SUB, OP_TRUE,
     },
     scanner::Token,
 };
@@ -86,6 +86,17 @@ impl Compiler {
 
                     Some(())
                 }
+                ast::Expression::Prefix(e) => {
+                    self.compile(ast::Node::Expression(e.rhs))?;
+
+                    match &e.operator {
+                        Token::Exclamation => self.emit_single(OP_BANG),
+                        Token::Minus => self.emit_single(OP_MINUS),
+                        _ => return None, // unregocnized error
+                    };
+
+                    Some(())
+                }
                 _ => None,
             },
         }
@@ -159,7 +170,6 @@ mod test {
 
     fn test_constants<T: Any + 'static>(expected: Vec<T>, actual: &[object::Object]) {
         assert_eq!(expected.len(), actual.len());
-
         for (i, cnst) in expected.iter().enumerate() {
             match &actual[i] {
                 object::Object::Integer(val) => {
@@ -231,6 +241,15 @@ mod test {
                     make(OP_CONSTANT, 0).unwrap(),
                     make(OP_CONSTANT, 1).unwrap(),
                     make_simple(OP_DIV),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "-1".to_owned(),
+                expected_consts: vec![1],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make_simple(OP_MINUS),
                     make_simple(OP_POP),
                 ],
             },
@@ -309,6 +328,15 @@ mod test {
                     make_simple(OP_TRUE),
                     make_simple(OP_FALSE),
                     make_simple(OP_NE),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "!true".to_owned(),
+                expected_consts: vec![],
+                expected_insts: vec![
+                    make_simple(OP_TRUE),
+                    make_simple(OP_BANG),
                     make_simple(OP_POP),
                 ],
             },

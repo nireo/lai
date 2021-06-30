@@ -1,8 +1,8 @@
 use crate::{
     object,
     opcode::{
-        Inst, OP_ADD, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT, OP_MUL, OP_NE, OP_POP, OP_SUB,
-        OP_TRUE,
+        Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT, OP_MINUS, OP_MUL,
+        OP_NE, OP_POP, OP_SUB, OP_TRUE,
     },
 };
 
@@ -61,6 +61,12 @@ impl VM {
                 OP_EQ | OP_NE | OP_GT => {
                     self.comparison(self.insts.0[ip].clone())?;
                 }
+                OP_BANG => {
+                    self.bang_operation()?;
+                }
+                OP_MINUS => {
+                    self.minus_operation()?;
+                }
                 _ => return None,
             };
 
@@ -95,6 +101,28 @@ impl VM {
         self.push(object::Object::Integer(object::ValueObj::new(value)))?;
 
         Some(())
+    }
+
+    fn bang_operation(&mut self) -> Option<()> {
+        let operand = self.pop()?;
+
+        match &operand {
+            object::Object::Bool(val) => {
+                self.push(object::Object::Bool(object::ValueObj::new(!val.value)))
+            }
+            _ => self.push(object::Object::Bool(object::ValueObj::new(false))),
+        }
+    }
+
+    fn minus_operation(&mut self) -> Option<()> {
+        let operand = self.pop()?;
+
+        match &operand {
+            object::Object::Integer(val) => {
+                self.push(object::Object::Integer(object::ValueObj::new(-val.value)))
+            }
+            _ => None, // minus is not supported for this type.
+        }
     }
 
     fn comparison(&mut self, op: u8) -> Option<()> {
@@ -247,6 +275,18 @@ mod test {
                 input: "50 / 2 * 2 + 10 - 5".to_owned(),
                 expected: 55,
             },
+            VmTestcase {
+                input: "-5".to_owned(),
+                expected: -5,
+            },
+            VmTestcase {
+                input: "-10".to_owned(),
+                expected: -10,
+            },
+            VmTestcase {
+                input: "-50 + 100 + -50".to_owned(),
+                expected: 0,
+            },
         ];
 
         run_vm_tests(tests);
@@ -314,6 +354,22 @@ mod test {
             VmTestcase {
                 input: "(1 < 2) == false".to_owned(),
                 expected: false,
+            },
+            VmTestcase {
+                input: "!true".to_owned(),
+                expected: false,
+            },
+            VmTestcase {
+                input: "!false".to_owned(),
+                expected: true,
+            },
+            VmTestcase {
+                input: "!5".to_owned(),
+                expected: false,
+            },
+            VmTestcase {
+                input: "!!true".to_owned(),
+                expected: true,
             },
         ];
 
