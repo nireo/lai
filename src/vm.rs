@@ -2,7 +2,7 @@ use crate::{
     object,
     opcode::{
         Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT, OP_MINUS, OP_MUL,
-        OP_NE, OP_POP, OP_SUB, OP_TRUE, OP_JMP, OP_JMPNT
+        OP_NE, OP_POP, OP_SUB, OP_TRUE, OP_JMP, OP_JMPNT, OP_NULL,
     },
 };
 
@@ -82,6 +82,9 @@ impl VM {
                     if !VM::is_truthy(&condition) {
                         ip = pos - 1;
                     }
+                }
+                OP_NULL => {
+                    self.push(object::Object::Null)?;
                 }
                 _ => return None,
             };
@@ -261,6 +264,19 @@ mod test {
                     _ => assert!(false),
                 }
             }
+            object::Object::Null => {
+                let value = &expected as &dyn Any;
+
+                match value.downcast_ref::<object::Object>() {
+                    Some(as_obj) => {
+                        match as_obj {
+                            object::Object::Null => assert!(true),
+                            _ => assert!(false),
+                        }
+                    }
+                    _ => assert!(false),
+                }
+            }
             _ => assert!(false), // XD
         };
     }
@@ -415,6 +431,22 @@ mod test {
             VmTestcase {
                 input: "if (false) { 10 } else { 20 }".to_owned(),
                 expected: 20,
+            },
+        ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_null_conditionals() {
+        let tests = vec![
+            VmTestcase {
+                input: "if (1 > 2) { 10 }".to_owned(),
+                expected: object::Object::Null,
+            },
+            VmTestcase {
+                input: "if (false) { 10 }".to_owned(),
+                expected: object::Object::Null,
             }
         ];
 

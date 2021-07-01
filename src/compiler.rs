@@ -1,4 +1,12 @@
-use crate::{ast, object::{self, ValueObj}, opcode::{Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_POP, OP_SUB, OP_TRUE, make, make_simple}, scanner::Token};
+use crate::{
+    ast,
+    object::{self, ValueObj},
+    opcode::{
+        make, make_simple, Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT,
+        OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SUB, OP_TRUE,
+    },
+    scanner::Token,
+};
 
 struct EmittedInstruction {
     opcode: u8,
@@ -89,24 +97,22 @@ impl Compiler {
                         self.remove_last_pop();
                     }
 
+                    let jmp_pos = self.emit(OP_JMP, 9999);
+                    let after_pos = self.insts.0.len();
+                    self.change_operand(not_true_pos, after_pos);
+
                     if e.other.is_none() {
-                        let after_pos = self.insts.0.len();
-                        self.change_operand(not_true_pos, after_pos);
+                        self.emit_single(OP_NULL);
                     } else {
-                        let jmp_pos = self.emit(OP_JMP, 9999);
-                        let after_pos = self.insts.0.len();
-
-                        self.change_operand(not_true_pos, after_pos);
-
                         self.compile(ast::Node::Statement(e.other.unwrap()))?;
 
                         if self.last_instruction_is_pop() {
                             self.remove_last_pop();
                         }
-
-                        let after_other = self.insts.0.len();
-                        self.change_operand(jmp_pos, after_other);
                     }
+
+                    let after_other = self.insts.0.len();
+                    self.change_operand(jmp_pos, after_other);
 
                     Some(())
                 }
@@ -212,7 +218,10 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{opcode::{OP_JMP, OP_JMPNT}, parser, scanner};
+    use crate::{
+        opcode::{OP_JMP, OP_JMPNT},
+        parser, scanner,
+    };
     use std::any::Any;
     struct CompilerTestcase<T> {
         input: String,
@@ -427,20 +436,36 @@ mod test {
 
     #[test]
     fn test_conditionals() {
-        let tests = vec![CompilerTestcase {
-            input: "if (true) { 10 } else { 20 }; 3333;".to_owned(),
-            expected_consts: vec![10, 20, 3333],
-            expected_insts: vec![
-                make_simple(OP_TRUE),
-                make(OP_JMPNT, 10).unwrap(),
-                make(OP_CONSTANT, 0).unwrap(),
-                make(OP_JMP, 13).unwrap(),
-                make(OP_CONSTANT, 1).unwrap(),
-                make_simple(OP_POP),
-                make(OP_CONSTANT, 2).unwrap(),
-                make_simple(OP_POP),
-            ],
-        }];
+        let tests = vec![
+            CompilerTestcase {
+                input: "if (true) { 10 } else { 20 }; 3333;".to_owned(),
+                expected_consts: vec![10, 20, 3333],
+                expected_insts: vec![
+                    make_simple(OP_TRUE),
+                    make(OP_JMPNT, 10).unwrap(),
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_JMP, 13).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_POP),
+                    make(OP_CONSTANT, 2).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "if (true) { 10 }; 3333;".to_owned(),
+                expected_consts: vec![10, 3333],
+                expected_insts: vec![
+                    make_simple(OP_TRUE),
+                    make(OP_JMPNT, 10).unwrap(),
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_JMP, 11).unwrap(),
+                    make_simple(OP_NULL),
+                    make_simple(OP_POP),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+        ];
 
         run_compiler_test(tests);
     }
