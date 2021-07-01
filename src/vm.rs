@@ -2,7 +2,7 @@ use crate::{
     object,
     opcode::{
         Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT, OP_MINUS, OP_MUL,
-        OP_NE, OP_POP, OP_SUB, OP_TRUE,
+        OP_NE, OP_POP, OP_SUB, OP_TRUE, OP_JMP, OP_JMPNT
     },
 };
 
@@ -67,6 +67,22 @@ impl VM {
                 OP_MINUS => {
                     self.minus_operation()?;
                 }
+                OP_JMP =>  {
+                    let pos =
+                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
+                    ip = pos - 1;
+
+                }
+                OP_JMPNT => {
+                    let pos =
+                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
+                    ip += 2;
+
+                    let condition = self.pop()?;
+                    if !VM::is_truthy(&condition) {
+                        ip = pos - 1;
+                    }
+                }
                 _ => return None,
             };
 
@@ -74,6 +90,15 @@ impl VM {
         }
 
         Some(())
+    }
+
+    fn is_truthy(obj: &object::Object) -> bool {
+        match obj {
+            object::Object::Bool(val) => {
+                val.value
+            }
+            _ => true,
+        }
     }
 
     fn bin_operation(&mut self, op: u8) -> Option<()> {
@@ -371,6 +396,26 @@ mod test {
                 input: "!!true".to_owned(),
                 expected: true,
             },
+        ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_conditionals() {
+        let tests = vec![
+            VmTestcase {
+                input: "if (true) { 10 }".to_owned(),
+                expected: 10,
+            },
+            VmTestcase {
+                input: "if (true) { 10 } else { 20 }".to_owned(),
+                expected: 10,
+            },
+            VmTestcase {
+                input: "if (false) { 10 } else { 20 }".to_owned(),
+                expected: 20,
+            }
         ];
 
         run_vm_tests(tests);
