@@ -1,27 +1,33 @@
 use crate::{
     object,
     opcode::{
-        Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT, OP_MINUS, OP_MUL,
-        OP_NE, OP_POP, OP_SUB, OP_TRUE, OP_JMP, OP_JMPNT, OP_NULL,
+        Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_JMP,
+        OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL, OP_SUB, OP_TRUE,
     },
 };
 
 static STACK_SIZE: usize = 2048;
+const GLOBALS_SIZE: usize = 65536;
 
 pub struct VM {
     constants: Vec<object::Object>,
     insts: Inst,
     stack: Vec<object::Object>,
+    globals: Vec<object::Object>,
     last: object::Object,
 }
 
 impl VM {
     pub fn new(constants: Vec<object::Object>, insts: Inst) -> Self {
+        let mut globals = Vec::with_capacity(GLOBALS_SIZE);
+        globals.resize_with(GLOBALS_SIZE, Default::default);
+
         Self {
             stack: Vec::new(),
             constants,
             insts,
             last: object::Object::Null,
+            globals,
         }
     }
 
@@ -54,9 +60,7 @@ impl VM {
                     self.last = self.pop()?;
                 }
                 OP_TRUE | OP_FALSE => {
-                    self.push(object::Object::Bool(object::ValueObj::new(
-                        self.insts.0[ip] == OP_TRUE,
-                    )))?;
+                    self.push(object::Object::Bool(self.insts.0[ip] == OP_TRUE))?;
                 }
                 OP_EQ | OP_NE | OP_GT => {
                     self.comparison(self.insts.0[ip].clone())?;
@@ -67,12 +71,19 @@ impl VM {
                 OP_MINUS => {
                     self.minus_operation()?;
                 }
-                OP_JMP =>  {
+                OP_JMP => {
                     let pos =
                         u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
                     ip = pos - 1;
-
                 }
+                OP_SET_GLOBAL => {
+                    let index =
+                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
+                    ip += 2;
+
+                    self.globals[index] = self.pop()?;
+                }
+                OP_GET_GLOBAL => {}
                 OP_JMPNT => {
                     let pos =
                         u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
@@ -97,12 +108,8 @@ impl VM {
 
     fn is_truthy(obj: &object::Object) -> bool {
         match obj {
-            object::Object::Bool(val) => {
-                val.value
-            }
-            object::Object::Null => {
-                false
-            }
+            object::Object::Bool(val) => val.clone(),
+            object::Object::Null => false,
             _ => true,
         }
     }
@@ -112,12 +119,12 @@ impl VM {
         let left_obj = self.pop()?;
 
         let left_value = match &left_obj {
-            object::Object::Integer(value) => value.value,
+            object::Object::Integer(value) => value,
             _ => return None,
         };
 
         let right_value = match &right_obj {
-            object::Object::Integer(value) => value.value,
+            object::Object::Integer(value) => value,
             _ => return None,
         };
 
@@ -129,7 +136,7 @@ impl VM {
             _ => return None,
         };
 
-        self.push(object::Object::Integer(object::ValueObj::new(value)))?;
+        self.push(object::Object::Integer(value))?;
 
         Some(())
     }
@@ -138,13 +145,9 @@ impl VM {
         let operand = self.pop()?;
 
         match &operand {
-            object::Object::Bool(val) => {
-                self.push(object::Object::Bool(object::ValueObj::new(!val.value)))
-            }
-            object::Object::Null => {
-                self.push(object::Object::Bool(object::ValueObj::new(true)))
-            }
-            _ => self.push(object::Object::Bool(object::ValueObj::new(false))),
+            object::Object::Bool(val) => self.push(object::Object::Bool(!val)),
+            object::Object::Null => self.push(object::Object::Bool(true)),
+            _ => self.push(object::Object::Bool(false)),
         }
     }
 
@@ -152,9 +155,7 @@ impl VM {
         let operand = self.pop()?;
 
         match &operand {
-            object::Object::Integer(val) => {
-                self.push(object::Object::Integer(object::ValueObj::new(-val.value)))
-            }
+            object::Object::Integer(val) => self.push(object::Object::Integer(-val)),
             _ => None, // minus is not supported for this type.
         }
     }
@@ -165,24 +166,20 @@ impl VM {
 
         match &right_obj {
             object::Object::Bool(rval) => match &left_obj {
-                object::Object::Bool(lval) => {
-                    self.push(object::Object::Bool(object::ValueObj::new(match op {
-                        OP_EQ => rval.value == lval.value,
-                        OP_NE => rval.value != lval.value,
-                        _ => return None,
-                    })))
-                }
+                object::Object::Bool(lval) => self.push(object::Object::Bool(match op {
+                    OP_EQ => rval == lval,
+                    OP_NE => rval != lval,
+                    _ => return None,
+                })),
                 _ => None,
             },
             object::Object::Integer(rval) => match &left_obj {
-                object::Object::Integer(lval) => {
-                    self.push(object::Object::Bool(object::ValueObj::new(match op {
-                        OP_EQ => rval.value == lval.value,
-                        OP_NE => rval.value != lval.value,
-                        OP_GT => lval.value > rval.value,
-                        _ => return None,
-                    })))
-                }
+                object::Object::Integer(lval) => self.push(object::Object::Bool(match op {
+                    OP_EQ => rval == lval,
+                    OP_NE => rval != lval,
+                    OP_GT => lval > rval,
+                    _ => return None,
+                })),
                 _ => None,
             },
             _ => Some(()),
@@ -255,7 +252,7 @@ mod test {
 
                 match value_any.downcast_ref::<i32>() {
                     Some(as_i32) => {
-                        assert!(as_i32.to_owned() == val.value);
+                        assert!(as_i32.to_owned() == val.clone());
                     }
                     _ => assert!(false),
                 }
@@ -265,7 +262,7 @@ mod test {
 
                 match value_any.downcast_ref::<bool>() {
                     Some(as_bool) => {
-                        assert!(as_bool.to_owned() == val.value);
+                        assert!(as_bool.to_owned() == val.clone());
                     }
                     _ => assert!(false),
                 }
@@ -274,12 +271,10 @@ mod test {
                 let value = &expected as &dyn Any;
 
                 match value.downcast_ref::<object::Object>() {
-                    Some(as_obj) => {
-                        match as_obj {
-                            object::Object::Null => assert!(true),
-                            _ => assert!(false),
-                        }
-                    }
+                    Some(as_obj) => match as_obj {
+                        object::Object::Null => assert!(true),
+                        _ => assert!(false),
+                    },
                     _ => assert!(false),
                 }
             }
@@ -453,7 +448,28 @@ mod test {
             VmTestcase {
                 input: "if (false) { 10 }".to_owned(),
                 expected: object::Object::Null,
-            }
+            },
+        ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    #[ignore = "Not implemented properly"]
+    fn test_global_let_statement() {
+        let tests = vec![
+            VmTestcase {
+                input: "int one = 1; one".to_owned(),
+                expected: 1,
+            },
+            VmTestcase {
+                input: "int one = 1; int two = 2; one + two".to_owned(),
+                expected: 3,
+            },
+            VmTestcase {
+                input: "int one = 1; int two = one + one; one + two".to_owned(),
+                expected: 3,
+            },
         ];
 
         run_vm_tests(tests);

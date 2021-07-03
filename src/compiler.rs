@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ast,
-    object::{self, ValueObj},
+    object,
     opcode::{
         make, make_simple, Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
         OP_GET_GLOBAL, OP_GT, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
@@ -183,7 +183,7 @@ impl Compiler {
                     Some(())
                 }
                 ast::Expression::Integer(e) => {
-                    let int_obj = object::Object::Integer(ValueObj::new(e.value));
+                    let int_obj = object::Object::Integer(e.value);
                     let pos = self.add_constant(int_obj);
                     self.emit(OP_CONSTANT, pos);
 
@@ -331,7 +331,7 @@ mod test {
                     let value_any = cnst as &dyn Any;
 
                     match value_any.downcast_ref::<i32>() {
-                        Some(as_i32) => assert!(as_i32.to_owned() == val.value),
+                        Some(as_i32) => assert!(as_i32.to_owned() == val.clone()),
                         _ => assert!(false),
                     }
                 }

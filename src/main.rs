@@ -31,10 +31,10 @@ fn main() {
         let res = vm.get_last();
 
         match &res {
-            object::Object::Integer(val) => println!("{}", val.value),
-            object::Object::String(val) => println!("{}", val.value),
-            object::Object::Float(val) => println!("{}", val.value),
-            object::Object::Bool(val) => println!("{}", val.value),
+            object::Object::Integer(val) => println!("{}", val),
+            object::Object::String(val) => println!("{}", val),
+            object::Object::Float(val) => println!("{}", val),
+            object::Object::Bool(val) => println!("{}", val),
             _ => println!("object display not supported"),
         };
     }
