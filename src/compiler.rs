@@ -11,20 +11,21 @@ use crate::{
     scanner::{self, Token},
 };
 
+#[derive(PartialEq, Debug)]
 pub enum Scope {
     Global,
 }
 
-struct Symbol {
-    name: String,
-    scope: Scope,
-    index: i32,
-    value_type: scanner::Token,
+pub struct Symbol {
+    pub name: String,
+    pub scope: Scope,
+    pub index: usize,
+    pub value_type: scanner::Token,
 }
 
 struct SymbolTable {
-    store: HashMap<String, Symbol>,
-    definition_count: i32,
+    pub store: HashMap<String, Symbol>,
+    pub definition_count: usize,
 }
 
 impl SymbolTable {
@@ -66,6 +67,7 @@ pub struct Compiler {
 
     last_inst: EmittedInstruction,
     prev_inst: EmittedInstruction,
+    symbol_table: SymbolTable,
 }
 
 impl Compiler {
@@ -76,6 +78,7 @@ impl Compiler {
 
             last_inst: EmittedInstruction { opcode: 0, pos: 0 },
             prev_inst: EmittedInstruction { opcode: 0, pos: 0 },
+            symbol_table: SymbolTable::new(),
         }
     }
 
@@ -110,6 +113,10 @@ impl Compiler {
                 }
                 ast::Statement::Assigment(exp) => {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
+                    let symbol = self.symbol_table.define(exp.name, exp.variable_type);
+                    let index = symbol.index;
+                    self.emit(OP_SET_GLOBAL, index);
+
                     Some(())
                 }
                 _ => None,
@@ -136,6 +143,14 @@ impl Compiler {
                             _ => return None, // non recognized/supported operator
                         };
                     }
+                    Some(())
+                }
+                ast::Expression::Identifier(exp) => {
+                    let symbol = self.symbol_table.resolve(exp.name)?;
+                    // we need to store this in a variable because otherwise the compiler doesn't like it
+                    let index = symbol.index;
+                    self.emit(OP_GET_GLOBAL, index);
+
                     Some(())
                 }
                 ast::Expression::If(e) => {
@@ -536,7 +551,7 @@ mod test {
             },
             CompilerTestcase {
                 input: "int one = 1; one;".to_owned(),
-                expected_consts: vec![10, 3333],
+                expected_consts: vec![1],
                 expected_insts: vec![
                     make(OP_CONSTANT, 0).unwrap(),
                     make(OP_SET_GLOBAL, 0).unwrap(),
@@ -546,7 +561,7 @@ mod test {
             },
             CompilerTestcase {
                 input: "int one = 1; int two = one; two;".to_owned(),
-                expected_consts: vec![10, 3333],
+                expected_consts: vec![1],
                 expected_insts: vec![
                     make(OP_CONSTANT, 0).unwrap(),
                     make(OP_SET_GLOBAL, 0).unwrap(),
@@ -559,5 +574,41 @@ mod test {
         ];
 
         run_compiler_test(tests);
+    }
+
+    #[test]
+    fn symbol_table_define_test() {
+        let mut global = SymbolTable::new();
+
+        let symbol1 = global.define("a".to_owned(), Token::Integer);
+        assert_eq!(symbol1.value_type, Token::Integer);
+        assert_eq!(symbol1.name, "a".to_owned());
+        assert_eq!(symbol1.scope, Scope::Global);
+        assert_eq!(symbol1.index, 0);
+
+        let symbol2 = global.define("b".to_owned(), Token::Integer);
+        assert_eq!(symbol2.value_type, Token::Integer);
+        assert_eq!(symbol2.name, "b".to_owned());
+        assert_eq!(symbol2.scope, Scope::Global);
+        assert_eq!(symbol2.index, 1);
+    }
+
+    #[test]
+    fn smybol_table_resolve_test() {
+        let mut global = SymbolTable::new();
+        global.define("a".to_owned(), Token::Integer);
+        global.define("b".to_owned(), Token::Integer);
+
+        let to_test = ["a", "b"];
+        for (i, name) in to_test.iter().enumerate() {
+            let res = global.resolve(name.to_string());
+            assert!(!res.is_none());
+
+            let res = res.unwrap();
+            assert_eq!(res.value_type, Token::Integer);
+            assert_eq!(res.name, name.to_string());
+            assert_eq!(res.scope, Scope::Global);
+            assert_eq!(res.index, i);
+        }
     }
 }
