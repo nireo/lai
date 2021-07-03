@@ -1,12 +1,59 @@
+use std::collections::HashMap;
+
 use crate::{
     ast,
     object::{self, ValueObj},
     opcode::{
-        make, make_simple, Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GT,
-        OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SUB, OP_TRUE,
+        make, make_simple, Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
+        OP_GET_GLOBAL, OP_GT, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
+        OP_SET_GLOBAL, OP_SUB, OP_TRUE,
     },
-    scanner::Token,
+    scanner::{self, Token},
 };
+
+pub enum Scope {
+    Global,
+}
+
+struct Symbol {
+    name: String,
+    scope: Scope,
+    index: i32,
+    value_type: scanner::Token,
+}
+
+struct SymbolTable {
+    store: HashMap<String, Symbol>,
+    definition_count: i32,
+}
+
+impl SymbolTable {
+    pub fn new() -> Self {
+        Self {
+            definition_count: 0,
+            store: HashMap::new(),
+        }
+    }
+
+    fn resolve(&self, name: String) -> Option<&Symbol> {
+        self.store.get(&name)
+    }
+
+    fn define(&mut self, name: String, value_type: Token) -> &Symbol {
+        let symbol = Symbol {
+            name: name.clone(),
+            index: self.definition_count,
+            scope: Scope::Global,
+            value_type,
+        };
+
+        self.store.insert(name.clone(), symbol);
+        self.definition_count += 1;
+
+        // TODO: a better way to do this?
+        self.store.get(&name).unwrap()
+    }
+}
 
 struct EmittedInstruction {
     opcode: u8,
@@ -59,6 +106,10 @@ impl Compiler {
                     for st in exp.statements.iter() {
                         self.compile(ast::Node::Statement(Box::new(st.clone())))?;
                     }
+                    Some(())
+                }
+                ast::Statement::Assigment(exp) => {
+                    self.compile(ast::Node::Expression(Box::new(exp.value)))?;
                     Some(())
                 }
                 _ => None,
@@ -462,6 +513,46 @@ mod test {
                     make_simple(OP_NULL),
                     make_simple(OP_POP),
                     make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+        ];
+
+        run_compiler_test(tests);
+    }
+
+    #[test]
+    fn test_global_let_statement() {
+        let tests = vec![
+            CompilerTestcase {
+                input: "int x = 1; int y = 2;".to_owned(),
+                expected_consts: vec![1, 2],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_SET_GLOBAL, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make(OP_SET_GLOBAL, 1).unwrap(),
+                ],
+            },
+            CompilerTestcase {
+                input: "int one = 1; one;".to_owned(),
+                expected_consts: vec![10, 3333],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_SET_GLOBAL, 0).unwrap(),
+                    make(OP_GET_GLOBAL, 0).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "int one = 1; int two = one; two;".to_owned(),
+                expected_consts: vec![10, 3333],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_SET_GLOBAL, 0).unwrap(),
+                    make(OP_GET_GLOBAL, 0).unwrap(),
+                    make(OP_SET_GLOBAL, 1).unwrap(),
+                    make(OP_GET_GLOBAL, 1).unwrap(),
                     make_simple(OP_POP),
                 ],
             },

@@ -100,6 +100,9 @@ impl VM {
             object::Object::Bool(val) => {
                 val.value
             }
+            object::Object::Null => {
+                false
+            }
             _ => true,
         }
     }
@@ -137,6 +140,9 @@ impl VM {
         match &operand {
             object::Object::Bool(val) => {
                 self.push(object::Object::Bool(object::ValueObj::new(!val.value)))
+            }
+            object::Object::Null => {
+                self.push(object::Object::Bool(object::ValueObj::new(true)))
             }
             _ => self.push(object::Object::Bool(object::ValueObj::new(false))),
         }

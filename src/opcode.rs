@@ -1,3 +1,5 @@
+// We use constants, but then we would need to do some converting when adding
+// instructions or reading them.
 pub const OP_CONSTANT: u8 = 0;
 pub const OP_ADD: u8 = 1;
 pub const OP_POP: u8 = 2;
@@ -13,7 +15,9 @@ pub const OP_MINUS: u8 = 11;
 pub const OP_BANG: u8 = 12;
 pub const OP_JMPNT: u8 = 13;
 pub const OP_JMP: u8 = 14;
-pub const OP_NULL: u8 = 16;
+pub const OP_NULL: u8 = 15;
+pub const OP_GET_GLOBAL: u8 = 16;
+pub const OP_SET_GLOBAL: u8 = 17;
 
 pub struct Inst(pub Vec<u8>);
 
@@ -37,6 +41,8 @@ fn get_definition(opcode: u8) -> usize {
         OP_JMPNT => 2,
         OP_JMP => 2,
         OP_NULL => 0,
+        OP_GET_GLOBAL => 2,
+        OP_SET_GLOBAL => 2,
         _ => 0,
     }
 }
