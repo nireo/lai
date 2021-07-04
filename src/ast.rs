@@ -24,6 +24,7 @@ pub enum Expression {
     Infix(InfixExpression),
     If(IfNode),
     FunctionParam(FunctionParamNode),
+    Array(ArrayNode),
 }
 
 #[derive(Debug, Clone)]
@@ -130,4 +131,9 @@ pub struct ExpressionStatementNode {
 #[derive(Debug, Clone)]
 pub struct IdentifierNode {
     pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArrayNode {
+    pub elements: Vec<Expression>,
 }

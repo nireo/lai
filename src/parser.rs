@@ -132,13 +132,44 @@ impl Parser {
             Token::StringValue(_) => self.parse_string_literal(),
             Token::Exclamation | Token::Minus => self.parse_prefix_expression(),
             Token::True | Token::False => self.parse_boolean_literal(),
-
             Token::If => self.parse_if_expression(),
             Token::Fn => self.parse_function_literal(),
-
+            Token::LBracket => self.parse_array_literal(),
             _ => None,
         }
     }
+
+    fn parse_array_literal(&mut self) -> Option<ast::Expression> {
+        Some(ast::Expression::Array(ast::ArrayNode {
+            elements: self.parse_expression_list(Token::RBracket)?,
+        }))
+    }
+
+    fn parse_expression_list(&mut self, end: Token) -> Option<Vec<ast::Expression>> {
+        let mut list: Vec<ast::Expression> = Vec::new();
+        if self.peek_token == end {
+            self.next_token();
+            return Some(list);
+        }
+
+        self.next_token();
+        list.push(self.parse_expression(Precedence::Lowest)?);
+
+        while self.peek_token == Token::Comma {
+            self.next_token();
+            self.next_token();
+
+            list.push(self.parse_expression(Precedence::Lowest)?);
+        }
+
+        if self.peek_token != end {
+            return None;
+        }
+        self.next_token();
+
+        Some(list)
+    }
+
 
     fn parse_call_expression(&mut self, func: Box<ast::Expression>) -> Option<ast::Expression> {
         let args = self.parse_call_arguments()?;
@@ -951,6 +982,31 @@ mod tests {
             ast::Statement::Expression(val) => {
                 let to_return = match &val.value {
                     ast::Expression::String(node) => node.value == "hello world",
+                    _ => false,
+                };
+
+                to_return
+            }
+            _ => false,
+        };
+
+        assert!(is_correct_type);
+    }
+
+    #[test]
+    fn test_array_literal_parsing() {
+        let input = "[1, 2 * 2, 3 + 3]";
+
+        let lexer = scanner::Scanner::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let root_node = parser.parse_root_node();
+        assert_eq!(root_node.statements.len(), 1);
+
+        let is_correct_type = match &root_node.statements[0] {
+            ast::Statement::Expression(val) => {
+                let to_return = match &val.value {
+                    ast::Expression::Array(node) => node.elements.len() == 3,
                     _ => false,
                 };
 
