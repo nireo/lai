@@ -83,7 +83,13 @@ impl VM {
 
                     self.globals[index] = self.pop()?;
                 }
-                OP_GET_GLOBAL => {}
+                OP_GET_GLOBAL => {
+                    let index =
+                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
+                    ip += 2;
+
+                    self.push(self.globals[index].clone())?;
+                }
                 OP_JMPNT => {
                     let pos =
                         u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
