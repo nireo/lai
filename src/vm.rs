@@ -124,25 +124,38 @@ impl VM {
         let right_obj = self.pop()?;
         let left_obj = self.pop()?;
 
-        let left_value = match &left_obj {
-            object::Object::Integer(value) => value,
+        match &left_obj {
+            object::Object::Integer(left_value) => {
+                let right_value = match &right_obj {
+                    object::Object::Integer(value) => value,
+                    _ => return None,
+                };
+
+                let value = match op {
+                    OP_MUL => left_value * right_value,
+                    OP_SUB => left_value - right_value,
+                    OP_DIV => left_value / right_value,
+                    OP_ADD => left_value + right_value,
+                    _ => return None,
+                };
+
+                self.push(object::Object::Integer(value))?;
+            }
+            object::Object::String(left_value) => {
+                let right_value = match &right_obj {
+                    object::Object::String(value) => value,
+                    _ => return None,
+                };
+
+                let value = match op {
+                    OP_ADD => left_value.clone() + right_value,
+                    _ => return None,
+                };
+
+                self.push(object::Object::String(value))?;
+            }
             _ => return None,
         };
-
-        let right_value = match &right_obj {
-            object::Object::Integer(value) => value,
-            _ => return None,
-        };
-
-        let value = match op {
-            OP_MUL => left_value * right_value,
-            OP_SUB => left_value - right_value,
-            OP_DIV => left_value / right_value,
-            OP_ADD => left_value + right_value,
-            _ => return None,
-        };
-
-        self.push(object::Object::Integer(value))?;
 
         Some(())
     }
@@ -281,6 +294,14 @@ mod test {
                         object::Object::Null => assert!(true),
                         _ => assert!(false),
                     },
+                    _ => assert!(false),
+                }
+            }
+            object::Object::String(val) => {
+                let value_any = &expected as &dyn Any;
+
+                match value_any.downcast_ref::<String>() {
+                    Some(as_string) => assert!(as_string.to_owned() == val.clone()),
                     _ => assert!(false),
                 }
             }
@@ -461,7 +482,6 @@ mod test {
     }
 
     #[test]
-    #[ignore = "Not implemented properly"]
     fn test_global_let_statement() {
         let tests = vec![
             VmTestcase {
@@ -475,6 +495,22 @@ mod test {
             VmTestcase {
                 input: "int one = 1; int two = one + one; one + two".to_owned(),
                 expected: 3,
+            },
+        ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_string_expressions() {
+        let tests = vec![
+            VmTestcase {
+                input: "\"test\"".to_owned(),
+                expected: "test".to_owned(),
+            },
+            VmTestcase {
+                input: "\"te\" + \"st\"".to_owned(),
+                expected: "test".to_owned(),
             },
         ];
 

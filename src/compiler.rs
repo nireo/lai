@@ -122,6 +122,13 @@ impl Compiler {
                 _ => None,
             },
             ast::Node::Expression(exp) => match *exp {
+                ast::Expression::String(exp) => {
+                    let str_const = object::Object::String(exp.value.clone());
+                    let pos = self.add_constant(str_const);
+                    self.emit(OP_CONSTANT, pos);
+
+                    Some(())
+                }
                 ast::Expression::Infix(e) => {
                     if e.operator == Token::LessThan {
                         self.compile(ast::Node::Expression(e.rhs))?;
@@ -332,6 +339,14 @@ mod test {
 
                     match value_any.downcast_ref::<i32>() {
                         Some(as_i32) => assert!(as_i32.to_owned() == val.clone()),
+                        _ => assert!(false),
+                    }
+                }
+                object::Object::String(val) => {
+                    let value_any = cnst as &dyn Any;
+
+                    match value_any.downcast_ref::<String>() {
+                        Some(as_string) => assert!(as_string.to_owned() == val.clone()),
                         _ => assert!(false),
                     }
                 }
@@ -594,7 +609,7 @@ mod test {
     }
 
     #[test]
-    fn smybol_table_resolve_test() {
+    fn symbol_table_resolve_test() {
         let mut global = SymbolTable::new();
         global.define("a".to_owned(), Token::Integer);
         global.define("b".to_owned(), Token::Integer);
@@ -610,5 +625,31 @@ mod test {
             assert_eq!(res.scope, Scope::Global);
             assert_eq!(res.index, i);
         }
+    }
+
+    #[test]
+    fn test_string_expression() {
+        let tests = vec![
+            CompilerTestcase {
+                input: "\"test\"".to_owned(),
+                expected_consts: vec!["test".to_owned()],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "\"te\" + \"st\"".to_owned(),
+                expected_consts: vec!["te".to_owned(), "st".to_owned()],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_ADD),
+                    make_simple(OP_POP),
+                ],
+            },
+        ];
+
+        run_compiler_test(tests);
     }
 }
