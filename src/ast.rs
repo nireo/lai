@@ -25,6 +25,7 @@ pub enum Expression {
     If(IfNode),
     FunctionParam(FunctionParamNode),
     Array(ArrayNode),
+    Index(IndexExpression),
 }
 
 #[derive(Debug, Clone)]
@@ -136,4 +137,10 @@ pub struct IdentifierNode {
 #[derive(Debug, Clone)]
 pub struct ArrayNode {
     pub elements: Vec<Expression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexExpression {
+    pub lhs: Box<Expression>,
+    pub index: Box<Expression>,
 }

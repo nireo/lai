@@ -15,6 +15,7 @@ pub enum Precedence {
     Product,
     Prefix,
     Call,
+    Index,
 }
 
 impl Parser {
@@ -121,8 +122,24 @@ impl Parser {
             | Token::GreaterThan => self.parse_infix_expression(lhs),
 
             Token::LParen => self.parse_call_expression(lhs),
+            Token::LBracket => self.parse_index_expression(lhs),
             _ => None,
         }
+    }
+
+    fn parse_index_expression(&mut self, lhs: Box<ast::Expression>) -> Option<ast::Expression> {
+        self.next_token();
+        let index = self.parse_expression(Precedence::Lowest)?;
+
+        if self.peek_token != Token::RBracket {
+            return None;
+        }
+        self.next_token();
+
+        Some(ast::Expression::Index(ast::IndexExpression {
+            lhs,
+            index: Box::new(index),
+        }))
     }
 
     fn parse_prefix(&mut self, tok: Token) -> Option<ast::Expression> {
@@ -427,6 +444,7 @@ impl Parser {
             Token::Slash => Precedence::Product,
             Token::Asterisk => Precedence::Product,
             Token::LParen => Precedence::Call,
+            Token::LBracket => Precedence::Index,
             _ => Precedence::Lowest,
         }
     }
@@ -463,6 +481,7 @@ impl Parser {
             Precedence::Product => 4,
             Precedence::Prefix => 5,
             Precedence::Call => 6,
+            Precedence::Index => 7,
         }
     }
 
@@ -1007,6 +1026,31 @@ mod tests {
             ast::Statement::Expression(val) => {
                 let to_return = match &val.value {
                     ast::Expression::Array(node) => node.elements.len() == 3,
+                    _ => false,
+                };
+
+                to_return
+            }
+            _ => false,
+        };
+
+        assert!(is_correct_type);
+    }
+
+    #[test]
+    fn test_index_expression() {
+        let input = "[1, 2 * 2, 3 + 3][1]";
+
+        let lexer = scanner::Scanner::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let root_node = parser.parse_root_node();
+        assert_eq!(root_node.statements.len(), 1);
+
+        let is_correct_type = match &root_node.statements[0] {
+            ast::Statement::Expression(val) => {
+                let to_return = match &val.value {
+                    ast::Expression::Index(_) => true,
                     _ => false,
                 };
 
