@@ -2,7 +2,7 @@ use crate::{
     object,
     opcode::{
         Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_JMP,
-        OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL, OP_SUB, OP_TRUE,
+        OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL, OP_SUB, OP_TRUE, OP_ARRAY,
     },
 };
 
@@ -102,6 +102,20 @@ impl VM {
                 }
                 OP_NULL => {
                     self.push(object::Object::Null)?;
+                }
+                OP_ARRAY => {
+                    let element_count =
+                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
+                    ip += 2;
+
+                    let mut array_elements: Vec<object::Object> = Vec::new();
+                    array_elements.resize(element_count, object::Object::Null);
+                    // loop in reverse, since the last array element is last.
+                    for i in (0..element_count).rev() {
+                        array_elements[i] = self.pop()?;
+                    }
+
+                    self.push(object::Object::Array(array_elements))?;
                 }
                 _ => return None,
             };
@@ -272,6 +286,20 @@ mod test {
                 match value_any.downcast_ref::<i32>() {
                     Some(as_i32) => {
                         assert!(as_i32.to_owned() == val.clone());
+                    }
+                    _ => assert!(false),
+                }
+            }
+            object::Object::Array(val) => {
+                let expected_values = &expected as &dyn Any;
+                match expected_values.downcast_ref::<Vec<i32>>() {
+                    Some(as_arr) => {
+                        for (i, obj) in val.iter().enumerate() {
+                            match obj {
+                                object::Object::Integer(int_val) => assert!(int_val.clone() == as_arr[i]),
+                                _ => assert!(false),
+                            }
+                        }
                     }
                     _ => assert!(false),
                 }
@@ -512,6 +540,26 @@ mod test {
                 input: "\"te\" + \"st\"".to_owned(),
                 expected: "test".to_owned(),
             },
+        ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_array_literals() {
+        let tests = vec![
+            VmTestcase {
+                input: "[]".to_owned(),
+                expected: vec![],
+            },
+            VmTestcase {
+                input: "[1, 2, 3]".to_owned(),
+                expected: vec![1, 2, 3],
+            },
+            VmTestcase {
+                input: "[1 + 2, 3 * 4, 5 + 6]".to_owned(),
+                expected: vec![3, 12, 11],
+            }
         ];
 
         run_vm_tests(tests);

@@ -1,15 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    ast,
-    object,
-    opcode::{
-        make, make_simple, Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
-        OP_GET_GLOBAL, OP_GT, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
-        OP_SET_GLOBAL, OP_SUB, OP_TRUE,
-    },
-    scanner::{self, Token},
-};
+use crate::{ast, object, opcode::{Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL, OP_SUB, OP_TRUE, make, make_simple}, scanner::{self, Token}};
 
 #[derive(PartialEq, Debug)]
 pub enum Scope {
@@ -126,6 +117,14 @@ impl Compiler {
                     let str_const = object::Object::String(exp.value.clone());
                     let pos = self.add_constant(str_const);
                     self.emit(OP_CONSTANT, pos);
+
+                    Some(())
+                }
+                ast::Expression::Array(exp) => {
+                    for elem in exp.elements.iter() {
+                        self.compile(ast::Node::Expression(Box::new(elem.clone())))?;
+                    }
+                    self.emit(OP_ARRAY, exp.elements.len());
 
                     Some(())
                 }
@@ -291,10 +290,7 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        opcode::{OP_JMP, OP_JMPNT},
-        parser, scanner,
-    };
+    use crate::{opcode::{OP_ARRAY, OP_JMP, OP_JMPNT}, parser, scanner};
     use std::any::Any;
     struct CompilerTestcase<T> {
         input: String,
@@ -645,6 +641,50 @@ mod test {
                     make(OP_CONSTANT, 0).unwrap(),
                     make(OP_CONSTANT, 1).unwrap(),
                     make_simple(OP_ADD),
+                    make_simple(OP_POP),
+                ],
+            },
+        ];
+
+        run_compiler_test(tests);
+    }
+
+    #[test]
+    fn test_array_literal() {
+        let tests = vec![
+            CompilerTestcase {
+                input: "[]".to_owned(),
+                expected_consts: vec![],
+                expected_insts: vec![
+                    make(OP_ARRAY, 0).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "[1, 2, 3]".to_owned(),
+                expected_consts: vec![1, 2, 3],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make(OP_CONSTANT, 2).unwrap(),
+                    make(OP_ARRAY, 3).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "[1 + 2, 3 - 4, 5 * 6]".to_owned(),
+                expected_consts: vec![1, 2, 3, 4, 5, 6],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make_simple(OP_ADD),
+                    make(OP_CONSTANT, 2).unwrap(),
+                    make(OP_CONSTANT, 3).unwrap(),
+                    make_simple(OP_SUB),
+                    make(OP_CONSTANT, 4).unwrap(),
+                    make(OP_CONSTANT, 5).unwrap(),
+                    make_simple(OP_MUL),
+                    make(OP_ARRAY, 3).unwrap(),
                     make_simple(OP_POP),
                 ],
             },

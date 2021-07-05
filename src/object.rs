@@ -18,6 +18,7 @@ pub enum Object {
     Bool(bool),
     Return(Box<Object>),
     Function(FunctionObject),
+    Array(Vec<Object>),
 
     // Error holds information about an error in an string, so we can just use a ValueObj
     Error(String),

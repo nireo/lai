@@ -18,6 +18,7 @@ pub const OP_JMP: u8 = 14;
 pub const OP_NULL: u8 = 15;
 pub const OP_GET_GLOBAL: u8 = 16;
 pub const OP_SET_GLOBAL: u8 = 17;
+pub const OP_ARRAY: u8 = 18;
 
 pub struct Inst(pub Vec<u8>);
 
@@ -43,6 +44,7 @@ fn get_definition(opcode: u8) -> usize {
         OP_NULL => 0,
         OP_GET_GLOBAL => 2,
         OP_SET_GLOBAL => 2,
+        OP_ARRAY => 2,
         _ => 0,
     }
 }
