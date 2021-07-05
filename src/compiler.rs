@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{ast, object, opcode::{Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL, OP_SUB, OP_TRUE, make, make_simple}, scanner::{self, Token}};
+use crate::{ast, object, opcode::{Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL, OP_SUB, OP_TRUE, make, make_simple}, scanner::{self, Token}};
 
 #[derive(PartialEq, Debug)]
 pub enum Scope {
@@ -151,6 +151,14 @@ impl Compiler {
                     }
                     Some(())
                 }
+                ast::Expression::Index(exp) => {
+                    self.compile(ast::Node::Expression(exp.lhs))?;
+                    self.compile(ast::Node::Expression(exp.index))?;
+
+                    self.emit_single(OP_INDEX);
+
+                    Some(())
+                }
                 ast::Expression::Identifier(exp) => {
                     let symbol = self.symbol_table.resolve(exp.name)?;
                     // we need to store this in a variable because otherwise the compiler doesn't like it
@@ -290,7 +298,7 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{opcode::{OP_ARRAY, OP_JMP, OP_JMPNT}, parser, scanner};
+    use crate::{opcode::{OP_ARRAY, OP_INDEX, OP_JMP, OP_JMPNT}, parser, scanner};
     use std::any::Any;
     struct CompilerTestcase<T> {
         input: String,
@@ -685,6 +693,29 @@ mod test {
                     make(OP_CONSTANT, 5).unwrap(),
                     make_simple(OP_MUL),
                     make(OP_ARRAY, 3).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+        ];
+
+        run_compiler_test(tests);
+    }
+
+    #[test]
+    fn test_index_expression() {
+        let tests = vec![
+            CompilerTestcase {
+                input: "[1, 2, 3][1 + 1]".to_owned(),
+                expected_consts: vec![1, 2, 3, 1, 1],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make(OP_CONSTANT, 2).unwrap(),
+                    make(OP_ARRAY, 3).unwrap(),
+                    make(OP_CONSTANT, 3).unwrap(),
+                    make(OP_CONSTANT, 4).unwrap(),
+                    make_simple(OP_ADD),
+                    make_simple(OP_INDEX),
                     make_simple(OP_POP),
                 ],
             },

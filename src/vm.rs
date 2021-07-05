@@ -3,6 +3,7 @@ use crate::{
     opcode::{
         Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_JMP,
         OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL, OP_SUB, OP_TRUE, OP_ARRAY,
+        OP_INDEX,
     },
 };
 
@@ -116,6 +117,34 @@ impl VM {
                     }
 
                     self.push(object::Object::Array(array_elements))?;
+                }
+                OP_INDEX => {
+                    let idx = self.pop()?;
+                    let lhs = self.pop()?;
+
+                    match lhs {
+                        object::Object::Array(elements) => {
+                            match idx {
+                                object::Object::Integer(index) => {
+                                    let mx = elements.len();
+                                    if index < 0 {
+                                        return None;
+                                    }
+
+                                    let as_usize = index as usize;
+
+                                    if as_usize > mx {
+                                        self.push(object::Object::Null)?;
+                                        return Some(());
+                                    }
+
+                                    self.push(elements[as_usize].clone())?;
+                                }
+                                _ => return None,
+                            }
+                        }
+                        _ => return None,
+                    };
                 }
                 _ => return None,
             };
@@ -560,6 +589,26 @@ mod test {
                 input: "[1 + 2, 3 * 4, 5 + 6]".to_owned(),
                 expected: vec![3, 12, 11],
             }
+        ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_index_expression() {
+        let tests = vec![
+            VmTestcase {
+                input: "[1, 2, 3][1]".to_owned(),
+                expected: 2,
+            },
+            VmTestcase {
+                input: "[1, 2, 3][0 + 2]".to_owned(),
+                expected: 3,
+            },
+            VmTestcase {
+                input: "[[1, 1, 1]][0][0]".to_owned(),
+                expected: 1,
+            },
         ];
 
         run_vm_tests(tests);
