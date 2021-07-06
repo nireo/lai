@@ -297,7 +297,8 @@ mod test {
             let res = compiler.compile(root_node);
             assert!(!res.is_none());
 
-            let mut vm = VM::new(compiler.consts, compiler.insts);
+            let instructions = compiler.get_insts().clone();
+            let mut vm = VM::new(compiler.consts, instructions);
 
             let res = vm.run();
             assert!(!res.is_none());

@@ -1,18 +1,20 @@
 use std::collections::HashMap;
 
-use crate::{
-    ast, object,
-    opcode::{
+use crate::{ast, object::{self, CompiledFunction}, opcode::{
         make, make_simple, Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
         OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
         OP_SET_GLOBAL, OP_SUB, OP_TRUE,
-    },
-    scanner::{self, Token},
-};
+    }, scanner::{self, Token}};
 
 #[derive(PartialEq, Debug)]
 pub enum Scope {
     Global,
+}
+
+pub struct CompilationScope {
+    pub instructions: Inst,
+    pub last_inst: EmittedInstruction,
+    pub prev_inst: EmittedInstruction,
 }
 
 pub struct Symbol {
@@ -55,7 +57,8 @@ impl SymbolTable {
     }
 }
 
-struct EmittedInstruction {
+#[derive(Clone)]
+pub struct EmittedInstruction {
     opcode: u8,
     pos: usize,
 }
@@ -64,20 +67,30 @@ pub struct Compiler {
     pub insts: Inst,
     pub consts: Vec<object::Object>,
 
-    last_inst: EmittedInstruction,
-    prev_inst: EmittedInstruction,
     symbol_table: SymbolTable,
+
+    pub scope_index: usize,
+    pub scopes: Vec<CompilationScope>,
 }
 
 impl Compiler {
     pub fn new() -> Self {
+        let main_scope = CompilationScope{
+            instructions: Inst(vec![]),
+            last_inst: EmittedInstruction { opcode: 0, pos: 0 },
+            prev_inst: EmittedInstruction { opcode: 0, pos: 0 },
+        };
+
+        let mut scopes: Vec<CompilationScope> = Vec::new();
+        scopes.push(main_scope);
+
         Self {
             consts: Vec::new(),
             insts: Inst(Vec::new()),
 
-            last_inst: EmittedInstruction { opcode: 0, pos: 0 },
-            prev_inst: EmittedInstruction { opcode: 0, pos: 0 },
             symbol_table: SymbolTable::new(),
+            scope_index: 0,
+            scopes,
         }
     }
 
@@ -86,7 +99,11 @@ impl Compiler {
     }
 
     pub fn get_insts(&self) -> &Inst {
-        &self.insts
+        self.current_instructions()
+    }
+
+    pub fn current_instructions(&self) -> &Inst {
+        &self.scopes[self.scope_index].instructions
     }
 
     pub fn compile(&mut self, node: ast::Node) -> Option<()> {
@@ -186,7 +203,7 @@ impl Compiler {
                     }
 
                     let jmp_pos = self.emit(OP_JMP, 9999);
-                    let after_pos = self.insts.0.len();
+                    let after_pos = self.current_instructions().0.len();
                     self.change_operand(not_true_pos, after_pos);
 
                     if e.other.is_none() {
@@ -199,7 +216,7 @@ impl Compiler {
                         }
                     }
 
-                    let after_other = self.insts.0.len();
+                    let after_other = self.current_instructions().0.len();
                     self.change_operand(jmp_pos, after_other);
 
                     Some(())
@@ -238,13 +255,13 @@ impl Compiler {
 
     fn set_last_instruction(&mut self, opcode: u8, pos: usize) {
         let prev = EmittedInstruction {
-            opcode: self.last_inst.opcode,
-            pos: self.last_inst.pos,
+            opcode: self.scopes[self.scope_index].last_inst.opcode,
+            pos: self.scopes[self.scope_index].last_inst.pos,
         };
         let last = EmittedInstruction { opcode, pos };
 
-        self.prev_inst = prev;
-        self.last_inst = last;
+        self.scopes[self.scope_index].prev_inst = prev;
+        self.scopes[self.scope_index].last_inst = last;
     }
 
     fn add_constant(&mut self, obj: object::Object) -> usize {
@@ -253,7 +270,7 @@ impl Compiler {
     }
 
     fn change_operand(&mut self, pos: usize, operand: usize) {
-        let op = self.insts.0[pos];
+        let op = self.current_instructions().0[pos];
         let new_inst = make(op, operand).unwrap();
 
         self.replace_instruction(pos, new_inst.0);
@@ -278,28 +295,52 @@ impl Compiler {
     }
 
     fn last_instruction_is_pop(&self) -> bool {
-        self.last_inst.opcode == OP_POP
+        self.scopes[self.scope_index].last_inst.opcode == OP_POP
     }
 
     fn remove_last_pop(&mut self) {
-        self.insts.0 = self.insts.0[..self.last_inst.pos].to_owned();
-        self.last_inst = EmittedInstruction {
-            opcode: self.prev_inst.opcode,
-            pos: self.prev_inst.pos,
-        };
+        let last = &self.scopes[self.scope_index].last_inst;
+        let prev = self.scopes[self.scope_index].prev_inst.clone();
+
+        let old = self.current_instructions();
+        let new = &old.0[..last.pos];
+
+        self.scopes[self.scope_index].instructions = Inst(new.to_vec());
+        self.scopes[self.scope_index].last_inst = prev;
     }
 
     fn replace_instruction(&mut self, pos: usize, insts: Vec<u8>) {
         for i in 0..insts.len() {
-            self.insts.0[pos + i] = insts[i];
+            self.scopes[self.scope_index].instructions.0[pos+i] = insts[i];
         }
     }
 
-    fn add_inst(&mut self, ins: &[u8]) -> usize {
-        let pos_new_inst = self.insts.0.len();
-        self.insts.0.extend_from_slice(ins);
+    fn add_inst(&mut self, inst: &[u8]) -> usize {
+        let pos_new_inst = self.current_instructions().0.len();
+        let mut updated_inst = self.current_instructions().clone();
+        updated_inst.0.extend_from_slice(inst);
+
+        self.scopes[self.scope_index].instructions = updated_inst;
 
         pos_new_inst
+    }
+
+    fn enter_scope(&mut self) {
+        let scope = CompilationScope {
+            instructions: Inst(vec![]),
+            last_inst: EmittedInstruction { opcode: 0, pos: 0 },
+            prev_inst: EmittedInstruction { opcode: 0, pos: 0 },
+        };
+
+        self.scopes.push(scope);
+        self.scope_index += 1;
+    }
+
+    fn leave_scope(&mut self) -> Inst {
+        let last = self.scopes.pop().unwrap();
+        self.scope_index -= 1;
+
+        last.instructions
     }
 }
 
