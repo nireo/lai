@@ -1,10 +1,15 @@
 use std::collections::HashMap;
 
-use crate::{ast, object::{self, CompiledFunction}, opcode::{
+use crate::{
+    ast,
+    object::{self, CompiledFunction},
+    opcode::{
         make, make_simple, Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
         OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
-        OP_SET_GLOBAL, OP_SUB, OP_TRUE,
-    }, scanner::{self, Token}};
+        OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE,
+    },
+    scanner::{self, Token},
+};
 
 #[derive(PartialEq, Debug)]
 pub enum Scope {
@@ -75,7 +80,7 @@ pub struct Compiler {
 
 impl Compiler {
     pub fn new() -> Self {
-        let main_scope = CompilationScope{
+        let main_scope = CompilationScope {
             instructions: Inst(vec![]),
             last_inst: EmittedInstruction { opcode: 0, pos: 0 },
             prev_inst: EmittedInstruction { opcode: 0, pos: 0 },
@@ -135,7 +140,11 @@ impl Compiler {
 
                     Some(())
                 }
-                _ => None,
+                ast::Statement::Return(exp) => {
+                    self.compile(ast::Node::Expression(Box::new(exp.value)))?;
+                    self.emit_single(OP_RETURN_VALUE);
+                    Some(())
+                }
             },
             ast::Node::Expression(exp) => match *exp {
                 ast::Expression::String(exp) => {
@@ -174,6 +183,22 @@ impl Compiler {
                             _ => return None, // non recognized/supported operator
                         };
                     }
+                    Some(())
+                }
+                ast::Expression::Function(exp) => {
+                    println!("compiling function");
+                    self.enter_scope();
+                    self.compile(ast::Node::Statement(exp.body))?;
+                    println!("compiling body");
+                    let instructions = self.leave_scope();
+                    let compiled_function = object::Object::CompiledFunction(
+                        object::CompiledFunction::new(instructions),
+                    );
+
+                    let pos = self.add_constant(compiled_function);
+                    println!("compiling pushing object");
+                    self.emit(OP_CONSTANT, pos);
+
                     Some(())
                 }
                 ast::Expression::Index(exp) => {
@@ -265,6 +290,7 @@ impl Compiler {
     }
 
     fn add_constant(&mut self, obj: object::Object) -> usize {
+        println!("pushed object");
         self.consts.push(obj);
         self.consts.len() - 1
     }
@@ -311,7 +337,7 @@ impl Compiler {
 
     fn replace_instruction(&mut self, pos: usize, insts: Vec<u8>) {
         for i in 0..insts.len() {
-            self.scopes[self.scope_index].instructions.0[pos+i] = insts[i];
+            self.scopes[self.scope_index].instructions.0[pos + i] = insts[i];
         }
     }
 
@@ -347,7 +373,10 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{opcode::{self, OP_ARRAY, OP_INDEX, OP_JMP, OP_JMPNT, OP_RETURN_VALUE}, parser, scanner};
+    use crate::{
+        opcode::{self, OP_ARRAY, OP_INDEX, OP_JMP, OP_JMPNT, OP_RETURN_VALUE},
+        parser, scanner,
+    };
     use std::any::Any;
     struct CompilerTestcase<T> {
         input: String,
@@ -384,6 +413,16 @@ mod test {
     }
 
     fn test_constants<T: Any + 'static>(expected: Vec<T>, actual: &[object::Object]) {
+        if expected.len() != actual.len() {
+            for item in actual {
+                match item {
+                    object::Object::CompiledFunction(_) => println!("compiled function"),
+                    object::Object::Integer(_) => println!("integer object"),
+                    _ => println!("not recognised object"),
+                };
+            }
+        }
+
         assert_eq!(expected.len(), actual.len());
         for (i, cnst) in expected.iter().enumerate() {
             match &actual[i] {
@@ -790,28 +829,22 @@ mod test {
 
     #[test]
     fn test_function() {
-        let tests = vec![
-            CompilerTestcase {
-                input: "fn add() -> int { return 5 + 10 }".to_owned(),
-                expected_consts: vec![
-                    object::Object::Integer(5),
-                    object::Object::Integer(10),
-                    object::Object::CompiledFunction(object::CompiledFunction::new(
-                        concat_instructions(&vec![
-                            make(OP_CONSTANT, 1).unwrap(),
-                            make(OP_CONSTANT, 2).unwrap(),
-                            make_simple(OP_ADD),
-                            make_simple(OP_RETURN_VALUE),
-                        ]).clone()
-                    ))
-                ],
-                expected_insts: vec![
-                    make(OP_CONSTANT, 2).unwrap(),
-                    make_simple(OP_POP),
-                ]
-
-            }
-        ];
+        let tests = vec![CompilerTestcase {
+            input: "fn func(int x) -> int { 5 + 10 }".to_owned(),
+            expected_consts: vec![
+                object::Object::Integer(5),
+                object::Object::Integer(10),
+                object::Object::CompiledFunction(object::CompiledFunction::new(
+                    concat_instructions(&vec![
+                        make(OP_CONSTANT, 0).unwrap(),
+                        make(OP_CONSTANT, 1).unwrap(),
+                        make_simple(OP_ADD),
+                    ])
+                    .clone(),
+                )),
+            ],
+            expected_insts: vec![make(OP_CONSTANT, 2).unwrap(), make_simple(OP_POP)],
+        }];
 
         run_compiler_test(tests);
     }

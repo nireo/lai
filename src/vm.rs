@@ -291,7 +291,6 @@ mod test {
     fn run_vm_tests<T: 'static + Clone>(tests: Vec<VmTestcase<T>>) {
         for tt in tests.iter() {
             let root_node = parse_program(&tt.input);
-            println!("{}", tt.input);
 
             let mut compiler = compiler::Compiler::new();
             let res = compiler.compile(root_node);
