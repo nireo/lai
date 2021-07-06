@@ -1,6 +1,14 @@
 use std::collections::HashMap;
 
-use crate::{ast, object, opcode::{Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL, OP_SUB, OP_TRUE, make, make_simple}, scanner::{self, Token}};
+use crate::{
+    ast, object,
+    opcode::{
+        make, make_simple, Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
+        OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
+        OP_SET_GLOBAL, OP_SUB, OP_TRUE,
+    },
+    scanner::{self, Token},
+};
 
 #[derive(PartialEq, Debug)]
 pub enum Scope {
@@ -298,7 +306,7 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{opcode::{OP_ARRAY, OP_INDEX, OP_JMP, OP_JMPNT}, parser, scanner};
+    use crate::{opcode::{self, OP_ARRAY, OP_INDEX, OP_JMP, OP_JMPNT, OP_RETURN_VALUE}, parser, scanner};
     use std::any::Any;
     struct CompilerTestcase<T> {
         input: String,
@@ -341,16 +349,39 @@ mod test {
                 object::Object::Integer(val) => {
                     let value_any = cnst as &dyn Any;
 
-                    match value_any.downcast_ref::<i32>() {
-                        Some(as_i32) => assert!(as_i32.to_owned() == val.clone()),
-                        _ => assert!(false),
+                    let mut ok = match value_any.downcast_ref::<i32>() {
+                        Some(as_i32) => as_i32.to_owned() == val.clone(),
+                        _ => false,
+                    };
+
+                    // check if the value is an object.
+                    if !ok {
+                        ok = match value_any.downcast_ref::<object::Object>() {
+                            Some(integer_obj) => match integer_obj {
+                                object::Object::Integer(v) => v.to_owned() == val.clone(),
+                                _ => false,
+                            },
+                            _ => false,
+                        }
                     }
+
+                    assert!(ok);
                 }
                 object::Object::String(val) => {
                     let value_any = cnst as &dyn Any;
 
                     match value_any.downcast_ref::<String>() {
                         Some(as_string) => assert!(as_string.to_owned() == val.clone()),
+                        _ => assert!(false),
+                    }
+                }
+                object::Object::CompiledFunction(val) => {
+                    let value_any = cnst as &dyn Any;
+
+                    match value_any.downcast_ref::<opcode::Inst>() {
+                        Some(got_inst) => {
+                            test_instructions(&[val.instructions.clone()], got_inst.clone())
+                        }
                         _ => assert!(false),
                     }
                 }
@@ -560,7 +591,7 @@ mod test {
         let tests = vec![
             CompilerTestcase {
                 input: "int x = 1; int y = 2;".to_owned(),
-                expected_consts: vec![1, 2],
+                expected_consts: vec![object::Object::Integer(1), object::Object::Integer(2)],
                 expected_insts: vec![
                     make(OP_CONSTANT, 0).unwrap(),
                     make(OP_SET_GLOBAL, 0).unwrap(),
@@ -570,7 +601,7 @@ mod test {
             },
             CompilerTestcase {
                 input: "int one = 1; one;".to_owned(),
-                expected_consts: vec![1],
+                expected_consts: vec![object::Object::Integer(1)],
                 expected_insts: vec![
                     make(OP_CONSTANT, 0).unwrap(),
                     make(OP_SET_GLOBAL, 0).unwrap(),
@@ -580,7 +611,7 @@ mod test {
             },
             CompilerTestcase {
                 input: "int one = 1; int two = one; two;".to_owned(),
-                expected_consts: vec![1],
+                expected_consts: vec![object::Object::Integer(1)],
                 expected_insts: vec![
                     make(OP_CONSTANT, 0).unwrap(),
                     make(OP_SET_GLOBAL, 0).unwrap(),
@@ -637,10 +668,7 @@ mod test {
             CompilerTestcase {
                 input: "\"test\"".to_owned(),
                 expected_consts: vec!["test".to_owned()],
-                expected_insts: vec![
-                    make(OP_CONSTANT, 0).unwrap(),
-                    make_simple(OP_POP),
-                ],
+                expected_insts: vec![make(OP_CONSTANT, 0).unwrap(), make_simple(OP_POP)],
             },
             CompilerTestcase {
                 input: "\"te\" + \"st\"".to_owned(),
@@ -663,10 +691,7 @@ mod test {
             CompilerTestcase {
                 input: "[]".to_owned(),
                 expected_consts: vec![],
-                expected_insts: vec![
-                    make(OP_ARRAY, 0).unwrap(),
-                    make_simple(OP_POP),
-                ],
+                expected_insts: vec![make(OP_ARRAY, 0).unwrap(), make_simple(OP_POP)],
             },
             CompilerTestcase {
                 input: "[1, 2, 3]".to_owned(),
@@ -703,22 +728,48 @@ mod test {
 
     #[test]
     fn test_index_expression() {
+        let tests = vec![CompilerTestcase {
+            input: "[1, 2, 3][1 + 1]".to_owned(),
+            expected_consts: vec![1, 2, 3, 1, 1],
+            expected_insts: vec![
+                make(OP_CONSTANT, 0).unwrap(),
+                make(OP_CONSTANT, 1).unwrap(),
+                make(OP_CONSTANT, 2).unwrap(),
+                make(OP_ARRAY, 3).unwrap(),
+                make(OP_CONSTANT, 3).unwrap(),
+                make(OP_CONSTANT, 4).unwrap(),
+                make_simple(OP_ADD),
+                make_simple(OP_INDEX),
+                make_simple(OP_POP),
+            ],
+        }];
+
+        run_compiler_test(tests);
+    }
+
+    #[test]
+    fn test_function() {
         let tests = vec![
             CompilerTestcase {
-                input: "[1, 2, 3][1 + 1]".to_owned(),
-                expected_consts: vec![1, 2, 3, 1, 1],
-                expected_insts: vec![
-                    make(OP_CONSTANT, 0).unwrap(),
-                    make(OP_CONSTANT, 1).unwrap(),
-                    make(OP_CONSTANT, 2).unwrap(),
-                    make(OP_ARRAY, 3).unwrap(),
-                    make(OP_CONSTANT, 3).unwrap(),
-                    make(OP_CONSTANT, 4).unwrap(),
-                    make_simple(OP_ADD),
-                    make_simple(OP_INDEX),
-                    make_simple(OP_POP),
+                input: "fn add() -> int { return 5 + 10 }".to_owned(),
+                expected_consts: vec![
+                    object::Object::Integer(5),
+                    object::Object::Integer(10),
+                    object::Object::CompiledFunction(object::CompiledFunction::new(
+                        concat_instructions(&vec![
+                            make(OP_CONSTANT, 1).unwrap(),
+                            make(OP_CONSTANT, 2).unwrap(),
+                            make_simple(OP_ADD),
+                            make_simple(OP_RETURN_VALUE),
+                        ]).clone()
+                    ))
                 ],
-            },
+                expected_insts: vec![
+                    make(OP_CONSTANT, 2).unwrap(),
+                    make_simple(OP_POP),
+                ]
+
+            }
         ];
 
         run_compiler_test(tests);

@@ -1,4 +1,4 @@
-use crate::ast::{self, FunctionParamNode};
+use crate::{ast::{self, FunctionParamNode}, opcode::{self, Inst}};
 
 // This file contains definitions for different objects used in running the code
 // through a virtual machine.
@@ -11,6 +11,19 @@ pub struct FunctionObject {
 }
 
 #[derive(Clone)]
+pub struct CompiledFunction {
+    pub instructions: opcode::Inst,
+}
+
+impl CompiledFunction {
+    pub fn new(instructions: Inst) -> Self {
+        Self {
+            instructions,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub enum Object {
     Integer(i32),
     String(String),
@@ -19,10 +32,8 @@ pub enum Object {
     Return(Box<Object>),
     Function(FunctionObject),
     Array(Vec<Object>),
-
-    // Error holds information about an error in an string, so we can just use a ValueObj
+    CompiledFunction(CompiledFunction),
     Error(String),
-
     Null,
 }
 

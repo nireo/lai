@@ -20,7 +20,11 @@ pub const OP_GET_GLOBAL: u8 = 16;
 pub const OP_SET_GLOBAL: u8 = 17;
 pub const OP_ARRAY: u8 = 18;
 pub const OP_INDEX: u8 = 19;
+pub const OP_CALL: u8 = 20;
+pub const OP_RETURN_VALUE: u8 = 21;
+pub const OP_RETURN: u8 = 22;
 
+#[derive(Clone)]
 pub struct Inst(pub Vec<u8>);
 
 // we could use a hashmap but this allows us not to have global variables, and different
@@ -47,6 +51,9 @@ fn get_definition(opcode: u8) -> usize {
         OP_SET_GLOBAL => 2,
         OP_ARRAY => 2,
         OP_INDEX => 0,
+        OP_CALL => 0,
+        OP_RETURN_VALUE => 0,
+        OP_RETURN => 0,
         _ => 0,
     }
 }
