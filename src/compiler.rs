@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use crate::{
     ast, object,
     opcode::{
-        make, make_simple, Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
-        OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
-        OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE,
+        make, make_simple, Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ,
+        OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE,
+        OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE,
     },
     scanner::{self, Token},
 };
@@ -184,6 +184,12 @@ impl Compiler {
                     }
                     Some(())
                 }
+                ast::Expression::FunctionCall(exp) => {
+                    self.compile(ast::Node::Expression(exp.func))?;
+                    self.emit_single(OP_CALL);
+
+                    Some(())
+                }
                 ast::Expression::Function(exp) => {
                     self.enter_scope();
                     self.compile(ast::Node::Statement(exp.body))?;
@@ -195,6 +201,10 @@ impl Compiler {
                         self.scopes[self.scope_index].last_inst.opcode = OP_RETURN_VALUE;
                     }
 
+                    if !self.last_instruction_is(OP_RETURN_VALUE) {
+                        self.emit_single(OP_RETURN);
+                    }
+
                     let instructions = self.leave_scope();
 
                     let compiled_function = object::Object::CompiledFunction(
@@ -203,6 +213,15 @@ impl Compiler {
 
                     let pos = self.add_constant(compiled_function);
                     self.emit(OP_CONSTANT, pos);
+
+                    let name = match &*exp.identifier {
+                        ast::Expression::Identifier(val) => val.name.clone(),
+                        _ => return None,
+                    };
+
+                    let symbol = self.symbol_table.define(name, exp.return_type);
+                    let index = symbol.index;
+                    self.emit(OP_SET_GLOBAL, index);
 
                     Some(())
                 }
@@ -383,7 +402,7 @@ impl Compiler {
 mod test {
     use super::*;
     use crate::{
-        opcode::{self, OP_ARRAY, OP_INDEX, OP_JMP, OP_JMPNT, OP_RETURN_VALUE},
+        opcode::{OP_ARRAY, OP_INDEX, OP_JMP, OP_JMPNT, OP_RETURN, OP_RETURN_VALUE},
         parser, scanner,
     };
     use std::any::Any;
@@ -459,14 +478,13 @@ mod test {
                     let value_any = cnst as &dyn Any;
 
                     match value_any.downcast_ref::<object::Object>() {
-                        Some(obj) => {
-                            match obj {
-                                object::Object::CompiledFunction(vl) => {
-                                    test_instructions(&[val.instructions.clone()], vl.instructions.clone())
-                                },
-                                _ => assert!(false)
-                            }
-                        }
+                        Some(obj) => match obj {
+                            object::Object::CompiledFunction(vl) => test_instructions(
+                                &[val.instructions.clone()],
+                                vl.instructions.clone(),
+                            ),
+                            _ => assert!(false),
+                        },
                         _ => assert!(false),
                     }
                 }
@@ -849,8 +867,74 @@ mod test {
                     .clone(),
                 )),
             ],
-            expected_insts: vec![make(OP_CONSTANT, 2).unwrap(), make_simple(OP_POP)],
+            expected_insts: vec![make(OP_CONSTANT, 2).unwrap(), make(OP_SET_GLOBAL, 0).unwrap(), make_simple(OP_POP)],
         }];
+
+        run_compiler_test(tests);
+    }
+
+    #[test]
+    fn function_without_arguments() {
+        let tests = vec![CompilerTestcase {
+            input: "fn func() -> void { }".to_owned(),
+            expected_consts: vec![object::Object::CompiledFunction(
+                object::CompiledFunction::new(
+                    concat_instructions(&vec![make_simple(OP_RETURN)]).clone(),
+                ),
+            )],
+            expected_insts: vec![
+                make(OP_CONSTANT, 0).unwrap(),
+                make(OP_SET_GLOBAL, 0).unwrap(),
+                make_simple(OP_POP),
+            ],
+        }];
+
+        run_compiler_test(tests);
+    }
+
+    #[test]
+    fn function_calls() {
+        let tests = vec![
+            // CompilerTestcase {
+            //     input: "fn func() -> int { 24 }();".to_owned(),
+            //     expected_consts: vec![
+            //         object::Object::Integer(24),
+            //         object::Object::CompiledFunction(object::CompiledFunction::new(
+            //             concat_instructions(&vec![
+            //                 make(OP_CONSTANT, 0).unwrap(),
+            //                 make_simple(OP_RETURN_VALUE),
+            //             ])
+            //             .clone(),
+            //         )),
+            //     ],
+            //     expected_insts: vec![
+            //         make(OP_CONSTANT, 1).unwrap(),
+            //         make_simple(OP_CALL),
+            //         make_simple(OP_POP),
+            //     ],
+            // },
+            CompilerTestcase {
+                input: "fn func() -> int { 24 }; func();".to_owned(),
+                expected_consts: vec![
+                    object::Object::Integer(24),
+                    object::Object::CompiledFunction(object::CompiledFunction::new(
+                        concat_instructions(&vec![
+                            make(OP_CONSTANT, 0).unwrap(),
+                            make_simple(OP_RETURN_VALUE),
+                        ])
+                        .clone(),
+                    )),
+                ],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make(OP_SET_GLOBAL, 0).unwrap(),
+                    make_simple(OP_POP),
+                    make(OP_GET_GLOBAL, 0).unwrap(),
+                    make_simple(OP_CALL),
+                    make_simple(OP_POP),
+                ],
+            },
+        ];
 
         run_compiler_test(tests);
     }
