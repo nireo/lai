@@ -12,10 +12,29 @@ const GLOBALS_SIZE: usize = 65536;
 
 pub struct VM {
     constants: Vec<object::Object>,
-    insts: Inst,
     stack: Vec<object::Object>,
     globals: Vec<object::Object>,
     last: object::Object,
+    frames: Vec<Frame>,
+    frame_index: usize,
+}
+
+struct Frame {
+    ip: usize,
+    func: object::CompiledFunction,
+}
+
+impl Frame {
+    fn new(func: object::CompiledFunction) -> Self {
+        Self {
+            ip: 0,
+            func,
+        }
+    }
+
+    fn instructions(&self) -> &Inst {
+        &self.func.instructions
+    }
 }
 
 impl VM {
@@ -23,12 +42,19 @@ impl VM {
         let mut globals = Vec::with_capacity(GLOBALS_SIZE);
         globals.resize_with(GLOBALS_SIZE, Default::default);
 
+        let mut frames = Vec::new();
+        let main_frame = Frame::new(object::CompiledFunction{
+            instructions: insts,
+        });
+        frames.push(main_frame);
+
         Self {
             stack: Vec::new(),
             constants,
-            insts,
             last: object::Object::Null,
             globals,
+            frames,
+            frame_index: 0,
         }
     }
 
@@ -45,26 +71,36 @@ impl VM {
     }
 
     pub fn run(&mut self) -> Option<()> {
-        let mut ip: usize = 0;
-        while ip < self.insts.0.len() {
-            match self.insts.0[ip] {
+        while self.current_frame().ip < self.current_frame().instructions().0.len() - 1  {
+            if self.frames[self.frame_index].ip != 0 {
+                self.frames[self.frame_index].ip += 1;
+            }
+
+            let ip = self.frames[self.frame_index].ip;
+            let ins = self.current_frame().instructions();
+            let op = ins.0[ip as usize];
+
+            match op {
                 OP_CONSTANT => {
                     let const_index =
-                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
+                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
                     self.push(self.constants[const_index].clone())?;
-                    ip += 2;
+                    self.frames[self.frame_index].ip += 2;
                 }
                 OP_ADD | OP_MUL | OP_SUB | OP_DIV => {
-                    self.bin_operation(self.insts.0[ip].clone())?;
+                    let op = ins.0[ip];
+                    self.bin_operation(op)?;
                 }
                 OP_POP => {
                     self.last = self.pop()?;
                 }
                 OP_TRUE | OP_FALSE => {
-                    self.push(object::Object::Bool(self.insts.0[ip] == OP_TRUE))?;
+                    let op = ins.0[ip];
+                    self.push(object::Object::Bool(op == OP_TRUE))?;
                 }
                 OP_EQ | OP_NE | OP_GT => {
-                    self.comparison(self.insts.0[ip].clone())?;
+                    let op = ins.0[ip];
+                    self.comparison(op)?;
                 }
                 OP_BANG => {
                     self.bang_operation()?;
@@ -74,31 +110,31 @@ impl VM {
                 }
                 OP_JMP => {
                     let pos =
-                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
-                    ip = pos - 1;
+                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip = pos - 1;
                 }
                 OP_SET_GLOBAL => {
                     let index =
-                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
-                    ip += 2;
+                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip += 2;
 
                     self.globals[index] = self.pop()?;
                 }
                 OP_GET_GLOBAL => {
                     let index =
-                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
-                    ip += 2;
+                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip += 2;
 
                     self.push(self.globals[index].clone())?;
                 }
                 OP_JMPNT => {
                     let pos =
-                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
-                    ip += 2;
+                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip += 2;
 
                     let condition = self.pop()?;
                     if !VM::is_truthy(&condition) {
-                        ip = pos - 1;
+                        self.frames[self.frame_index].ip = pos - 1;
                     }
                 }
                 OP_NULL => {
@@ -106,8 +142,8 @@ impl VM {
                 }
                 OP_ARRAY => {
                     let element_count =
-                        u16::from_be_bytes([self.insts.0[ip + 1], self.insts.0[ip + 2]]) as usize;
-                    ip += 2;
+                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip += 2;
 
                     let mut array_elements: Vec<object::Object> = Vec::new();
                     array_elements.resize(element_count, object::Object::Null);
@@ -148,11 +184,23 @@ impl VM {
                 }
                 _ => return None,
             };
-
-            ip += 1;
         }
 
         Some(())
+    }
+
+    fn push_frame(&mut self, frame: Frame) {
+        self.frames.push(frame);
+        self.frame_index += 1;
+    }
+
+    fn pop_frame(&mut self) -> Option<Frame> {
+        self.frame_index -= 1;
+        self.frames.pop()
+    }
+
+    fn current_frame(&self) -> &Frame {
+        &self.frames[self.frame_index]
     }
 
     fn is_truthy(obj: &object::Object) -> bool {
