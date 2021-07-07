@@ -24,7 +24,7 @@ pub const OP_CALL: u8 = 20;
 pub const OP_RETURN_VALUE: u8 = 21;
 pub const OP_RETURN: u8 = 22;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Inst(pub Vec<u8>);
 
 // we could use a hashmap but this allows us not to have global variables, and different

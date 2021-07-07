@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast,
-    object::{self, CompiledFunction},
+    ast, object,
     opcode::{
         make, make_simple, Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
         OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
@@ -186,17 +185,23 @@ impl Compiler {
                     Some(())
                 }
                 ast::Expression::Function(exp) => {
-                    println!("compiling function");
                     self.enter_scope();
                     self.compile(ast::Node::Statement(exp.body))?;
-                    println!("compiling body");
+
+                    if self.last_instruction_is(OP_POP) {
+                        let last_pos = self.scopes[self.scope_index].last_inst.pos;
+                        self.replace_instruction(last_pos, make_simple(OP_RETURN_VALUE).0);
+
+                        self.scopes[self.scope_index].last_inst.opcode = OP_RETURN_VALUE;
+                    }
+
                     let instructions = self.leave_scope();
+
                     let compiled_function = object::Object::CompiledFunction(
                         object::CompiledFunction::new(instructions),
                     );
 
                     let pos = self.add_constant(compiled_function);
-                    println!("compiling pushing object");
                     self.emit(OP_CONSTANT, pos);
 
                     Some(())
@@ -223,7 +228,7 @@ impl Compiler {
 
                     self.compile(ast::Node::Statement(e.after))?;
 
-                    if self.last_instruction_is_pop() {
+                    if self.last_instruction_is(OP_POP) {
                         self.remove_last_pop();
                     }
 
@@ -236,7 +241,7 @@ impl Compiler {
                     } else {
                         self.compile(ast::Node::Statement(e.other.unwrap()))?;
 
-                        if self.last_instruction_is_pop() {
+                        if self.last_instruction_is(OP_POP) {
                             self.remove_last_pop();
                         }
                     }
@@ -320,8 +325,12 @@ impl Compiler {
         pos
     }
 
-    fn last_instruction_is_pop(&self) -> bool {
-        self.scopes[self.scope_index].last_inst.opcode == OP_POP
+    fn last_instruction_is(&self, inst: u8) -> bool {
+        if self.current_instructions().0.len() == 0 {
+            false
+        } else {
+            self.scopes[self.scope_index].last_inst.opcode == inst
+        }
     }
 
     fn remove_last_pop(&mut self) {
@@ -413,17 +422,8 @@ mod test {
     }
 
     fn test_constants<T: Any + 'static>(expected: Vec<T>, actual: &[object::Object]) {
-        if expected.len() != actual.len() {
-            for item in actual {
-                match item {
-                    object::Object::CompiledFunction(_) => println!("compiled function"),
-                    object::Object::Integer(_) => println!("integer object"),
-                    _ => println!("not recognised object"),
-                };
-            }
-        }
-
         assert_eq!(expected.len(), actual.len());
+
         for (i, cnst) in expected.iter().enumerate() {
             match &actual[i] {
                 object::Object::Integer(val) => {
@@ -458,9 +458,14 @@ mod test {
                 object::Object::CompiledFunction(val) => {
                     let value_any = cnst as &dyn Any;
 
-                    match value_any.downcast_ref::<opcode::Inst>() {
-                        Some(got_inst) => {
-                            test_instructions(&[val.instructions.clone()], got_inst.clone())
+                    match value_any.downcast_ref::<object::Object>() {
+                        Some(obj) => {
+                            match obj {
+                                object::Object::CompiledFunction(vl) => {
+                                    test_instructions(&[val.instructions.clone()], vl.instructions.clone())
+                                },
+                                _ => assert!(false)
+                            }
                         }
                         _ => assert!(false),
                     }
@@ -839,6 +844,7 @@ mod test {
                         make(OP_CONSTANT, 0).unwrap(),
                         make(OP_CONSTANT, 1).unwrap(),
                         make_simple(OP_ADD),
+                        make_simple(OP_RETURN_VALUE),
                     ])
                     .clone(),
                 )),
