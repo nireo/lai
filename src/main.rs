@@ -26,7 +26,7 @@ fn main() {
         let mut vm = vm::VM::new(compiler.consts, compiler.insts);
 
         let res = vm.run();
-        assert!(!res.is_none());
+        assert!(!res.is_err());
 
         let res = vm.get_last();
 

@@ -314,7 +314,6 @@ impl Compiler {
     }
 
     fn add_constant(&mut self, obj: object::Object) -> usize {
-        println!("pushed object");
         self.consts.push(obj);
         self.consts.len() - 1
     }

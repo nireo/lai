@@ -70,7 +70,7 @@ impl VM {
         self.last.clone()
     }
 
-    pub fn run(&mut self) -> Option<()> {
+    pub fn run(&mut self) -> Result<(), String> {
         while self.current_frame().ip < self.current_frame().instructions().0.len() - 1  {
             if self.frames[self.frame_index].ip != 0 {
                 self.frames[self.frame_index].ip += 1;
@@ -78,7 +78,7 @@ impl VM {
 
             let ip = self.frames[self.frame_index].ip;
             let ins = self.current_frame().instructions();
-            let op = ins.0[ip as usize];
+            let op = ins.0[ip];
 
             match op {
                 OP_CONSTANT => {
@@ -88,18 +88,15 @@ impl VM {
                     self.frames[self.frame_index].ip += 2;
                 }
                 OP_ADD | OP_MUL | OP_SUB | OP_DIV => {
-                    let op = ins.0[ip];
                     self.bin_operation(op)?;
                 }
                 OP_POP => {
                     self.last = self.pop()?;
                 }
                 OP_TRUE | OP_FALSE => {
-                    let op = ins.0[ip];
                     self.push(object::Object::Bool(op == OP_TRUE))?;
                 }
                 OP_EQ | OP_NE | OP_GT => {
-                    let op = ins.0[ip];
                     self.comparison(op)?;
                 }
                 OP_BANG => {
@@ -164,39 +161,29 @@ impl VM {
                                 object::Object::Integer(index) => {
                                     let mx = elements.len();
                                     if index < 0 {
-                                        return None;
+                                        return Err(String::from("indexing with a negative integer"));
                                     }
 
                                     let as_usize = index as usize;
 
                                     if as_usize > mx {
                                         self.push(object::Object::Null)?;
-                                        return Some(());
+                                        return Err(String::from("index is too big"));
                                     }
 
                                     self.push(elements[as_usize].clone())?;
                                 }
-                                _ => return None,
+                                _ => return Err(String::from("type doesn't support indexing")),
                             }
                         }
-                        _ => return None,
+                        _ => return Err(String::from("indexing only works on arrays")),
                     };
                 }
-                _ => return None,
+                _ => return Err(String::from("opcode unrecognized.")),
             };
         }
 
-        Some(())
-    }
-
-    fn push_frame(&mut self, frame: Frame) {
-        self.frames.push(frame);
-        self.frame_index += 1;
-    }
-
-    fn pop_frame(&mut self) -> Option<Frame> {
-        self.frame_index -= 1;
-        self.frames.pop()
+        Ok(())
     }
 
     fn current_frame(&self) -> &Frame {
@@ -211,7 +198,7 @@ impl VM {
         }
     }
 
-    fn bin_operation(&mut self, op: u8) -> Option<()> {
+    fn bin_operation(&mut self, op: u8) -> Result<(), String> {
         let right_obj = self.pop()?;
         let left_obj = self.pop()?;
 
@@ -219,7 +206,7 @@ impl VM {
             object::Object::Integer(left_value) => {
                 let right_value = match &right_obj {
                     object::Object::Integer(value) => value,
-                    _ => return None,
+                    _ => return Err(String::from("right object is not an integer")),
                 };
 
                 let value = match op {
@@ -227,7 +214,7 @@ impl VM {
                     OP_SUB => left_value - right_value,
                     OP_DIV => left_value / right_value,
                     OP_ADD => left_value + right_value,
-                    _ => return None,
+                    _ => return Err(String::from("operator not supported for integer arithmetic")),
                 };
 
                 self.push(object::Object::Integer(value))?;
@@ -235,23 +222,23 @@ impl VM {
             object::Object::String(left_value) => {
                 let right_value = match &right_obj {
                     object::Object::String(value) => value,
-                    _ => return None,
+                    _ => return Err(String::from("cannot add a non-string to a string")),
                 };
 
                 let value = match op {
                     OP_ADD => left_value.clone() + right_value,
-                    _ => return None,
+                    _ => return Err(String::from("operation is not supported for strings")),
                 };
 
                 self.push(object::Object::String(value))?;
             }
-            _ => return None,
+            _ => return Err(String::from("types don't support arithmetic")),
         };
 
-        Some(())
+        Ok(())
     }
 
-    fn bang_operation(&mut self) -> Option<()> {
+    fn bang_operation(&mut self) -> Result<(), String> {
         let operand = self.pop()?;
 
         match &operand {
@@ -261,16 +248,16 @@ impl VM {
         }
     }
 
-    fn minus_operation(&mut self) -> Option<()> {
+    fn minus_operation(&mut self) -> Result<(), String> {
         let operand = self.pop()?;
 
         match &operand {
             object::Object::Integer(val) => self.push(object::Object::Integer(-val)),
-            _ => None, // minus is not supported for this type.
+            _ => Ok(()), // minus is not supported for this type.
         }
     }
 
-    fn comparison(&mut self, op: u8) -> Option<()> {
+    fn comparison(&mut self, op: u8) -> Result<(), String> {
         let right_obj = self.pop()?;
         let left_obj = self.pop()?;
 
@@ -279,39 +266,40 @@ impl VM {
                 object::Object::Bool(lval) => self.push(object::Object::Bool(match op {
                     OP_EQ => rval == lval,
                     OP_NE => rval != lval,
-                    _ => return None,
+                    _ => return Err(String::from("operation is not supported for booleans.")),
                 })),
-                _ => None,
+                _ => Err(String::from("cannot do comparison: unrecognized object on left")),
             },
             object::Object::Integer(rval) => match &left_obj {
                 object::Object::Integer(lval) => self.push(object::Object::Bool(match op {
                     OP_EQ => rval == lval,
                     OP_NE => rval != lval,
                     OP_GT => lval > rval,
-                    _ => return None,
+                    _ => return Err(String::from("comparison operator is not supported for integers.")),
                 })),
-                _ => None,
+                _ => Err(String::from("cannot do comparison: unrecognized object on left")),
             },
-            _ => Some(()),
+            _ => Err(String::from("cannot do comparsion: unrecognized object on left")),
         }
     }
 
-    fn push(&mut self, obj: object::Object) -> Option<()> {
+    fn push(&mut self, obj: object::Object) -> Result<(), String> {
         if self.stack.len() >= STACK_SIZE {
             // stack overflow
-            None
+            Err(String::from("cannot push: stack overflow"))
         } else {
             self.stack.push(obj);
-            Some(())
+            Ok(())
         }
     }
 
-    fn pop(&mut self) -> Option<object::Object> {
+    fn pop(&mut self) -> Result<object::Object, String> {
         if self.stack.len() == 0 {
+            println!("popped");
             // stack empty
-            None
+            Err(String::from("cannot pop: stack is empty."))
         } else {
-            Some(self.stack.pop().unwrap())
+            Ok(self.stack.pop().unwrap())
         }
     }
 }
@@ -337,18 +325,22 @@ mod test {
     }
 
     fn run_vm_tests<T: 'static + Clone>(tests: Vec<VmTestcase<T>>) {
-        for tt in tests.iter() {
+        for (idx, tt) in tests.iter().enumerate() {
             let root_node = parse_program(&tt.input);
 
             let mut compiler = compiler::Compiler::new();
             let res = compiler.compile(root_node);
+
             assert!(!res.is_none());
 
             let instructions = compiler.get_insts().clone();
             let mut vm = VM::new(compiler.consts, instructions);
 
             let res = vm.run();
-            assert!(!res.is_none());
+            if res.is_err() {
+                println!("test {} failed: {}", idx, res.as_ref().err().unwrap());
+            }
+            assert!(!res.is_err());
 
             let top = vm.get_last();
             test_expected_object(&top, tt.expected.clone());
