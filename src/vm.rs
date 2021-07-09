@@ -1,9 +1,9 @@
 use crate::{
     object,
     opcode::{
-        Inst, OP_ADD, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_JMP,
-        OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL, OP_SUB, OP_TRUE, OP_ARRAY,
-        OP_INDEX,
+        Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL,
+        OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL,
+        OP_SUB, OP_TRUE,
     },
 };
 
@@ -26,10 +26,7 @@ struct Frame {
 
 impl Frame {
     fn new(func: object::CompiledFunction) -> Self {
-        Self {
-            ip: 0,
-            func,
-        }
+        Self { ip: 0, func }
     }
 
     fn instructions(&self) -> &Inst {
@@ -43,7 +40,7 @@ impl VM {
         globals.resize_with(GLOBALS_SIZE, Default::default);
 
         let mut frames = Vec::new();
-        let main_frame = Frame::new(object::CompiledFunction{
+        let main_frame = Frame::new(object::CompiledFunction {
             instructions: insts,
         });
         frames.push(main_frame);
@@ -71,76 +68,73 @@ impl VM {
     }
 
     pub fn run(&mut self) -> Result<(), String> {
-        while self.current_frame().ip < self.current_frame().instructions().0.len() - 1  {
-            if self.frames[self.frame_index].ip != 0 {
-                self.frames[self.frame_index].ip += 1;
-            }
-
+        while self.current_frame().ip < self.current_frame().instructions().0.len() {
             let ip = self.frames[self.frame_index].ip;
             let ins = self.current_frame().instructions();
-            let op = ins.0[ip];
+            let op = ins.0[ip].clone();
 
             match op {
                 OP_CONSTANT => {
-                    let const_index =
-                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    let const_index = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
                     self.push(self.constants[const_index].clone())?;
-                    self.frames[self.frame_index].ip += 2;
+                    self.frames[self.frame_index].ip += 3;
                 }
                 OP_ADD | OP_MUL | OP_SUB | OP_DIV => {
                     self.bin_operation(op)?;
+                    self.frames[self.frame_index].ip += 1;
                 }
                 OP_POP => {
                     self.last = self.pop()?;
+                    self.frames[self.frame_index].ip += 1;
                 }
                 OP_TRUE | OP_FALSE => {
                     self.push(object::Object::Bool(op == OP_TRUE))?;
+                    self.frames[self.frame_index].ip += 1;
                 }
                 OP_EQ | OP_NE | OP_GT => {
                     self.comparison(op)?;
+                    self.frames[self.frame_index].ip += 1;
                 }
                 OP_BANG => {
                     self.bang_operation()?;
+                    self.frames[self.frame_index].ip += 1;
                 }
                 OP_MINUS => {
                     self.minus_operation()?;
+                    self.frames[self.frame_index].ip += 1;
                 }
                 OP_JMP => {
-                    let pos =
-                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip = pos - 1;
+                    let pos = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip = pos;
                 }
                 OP_SET_GLOBAL => {
-                    let index =
-                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip += 2;
+                    let index = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip += 3;
 
                     self.globals[index] = self.pop()?;
                 }
                 OP_GET_GLOBAL => {
-                    let index =
-                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip += 2;
+                    let index = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip += 3;
 
                     self.push(self.globals[index].clone())?;
                 }
                 OP_JMPNT => {
-                    let pos =
-                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip += 2;
+                    let pos = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip += 3;
 
                     let condition = self.pop()?;
                     if !VM::is_truthy(&condition) {
-                        self.frames[self.frame_index].ip = pos - 1;
+                        self.frames[self.frame_index].ip = pos;
                     }
                 }
                 OP_NULL => {
                     self.push(object::Object::Null)?;
+                    self.frames[self.frame_index].ip += 1;
                 }
                 OP_ARRAY => {
-                    let element_count =
-                        u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip += 2;
+                    let element_count = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
+                    self.frames[self.frame_index].ip += 3;
 
                     let mut array_elements: Vec<object::Object> = Vec::new();
                     array_elements.resize(element_count, object::Object::Null);
@@ -156,30 +150,30 @@ impl VM {
                     let lhs = self.pop()?;
 
                     match lhs {
-                        object::Object::Array(elements) => {
-                            match idx {
-                                object::Object::Integer(index) => {
-                                    let mx = elements.len();
-                                    if index < 0 {
-                                        return Err(String::from("indexing with a negative integer"));
-                                    }
-
-                                    let as_usize = index as usize;
-
-                                    if as_usize > mx {
-                                        self.push(object::Object::Null)?;
-                                        return Err(String::from("index is too big"));
-                                    }
-
-                                    self.push(elements[as_usize].clone())?;
+                        object::Object::Array(elements) => match idx {
+                            object::Object::Integer(index) => {
+                                let mx = elements.len();
+                                if index < 0 {
+                                    return Err(String::from("indexing with a negative integer"));
                                 }
-                                _ => return Err(String::from("type doesn't support indexing")),
+
+                                let as_usize = index as usize;
+
+                                if as_usize > mx {
+                                    self.push(object::Object::Null)?;
+                                    return Err(String::from("index is too big"));
+                                }
+
+                                self.push(elements[as_usize].clone())?;
                             }
-                        }
+                            _ => return Err(String::from("type doesn't support indexing")),
+                        },
                         _ => return Err(String::from("indexing only works on arrays")),
                     };
+
+                    self.frames[self.frame_index].ip += 1;
                 }
-                _ => return Err(String::from("opcode unrecognized.")),
+                _ => self.frames[self.frame_index].ip += 1,
             };
         }
 
@@ -214,7 +208,11 @@ impl VM {
                     OP_SUB => left_value - right_value,
                     OP_DIV => left_value / right_value,
                     OP_ADD => left_value + right_value,
-                    _ => return Err(String::from("operator not supported for integer arithmetic")),
+                    _ => {
+                        return Err(String::from(
+                            "operator not supported for integer arithmetic",
+                        ))
+                    }
                 };
 
                 self.push(object::Object::Integer(value))?;
@@ -268,18 +266,28 @@ impl VM {
                     OP_NE => rval != lval,
                     _ => return Err(String::from("operation is not supported for booleans.")),
                 })),
-                _ => Err(String::from("cannot do comparison: unrecognized object on left")),
+                _ => Err(String::from(
+                    "cannot do comparison: unrecognized object on left",
+                )),
             },
             object::Object::Integer(rval) => match &left_obj {
                 object::Object::Integer(lval) => self.push(object::Object::Bool(match op {
                     OP_EQ => rval == lval,
                     OP_NE => rval != lval,
                     OP_GT => lval > rval,
-                    _ => return Err(String::from("comparison operator is not supported for integers.")),
+                    _ => {
+                        return Err(String::from(
+                            "comparison operator is not supported for integers.",
+                        ))
+                    }
                 })),
-                _ => Err(String::from("cannot do comparison: unrecognized object on left")),
+                _ => Err(String::from(
+                    "cannot do comparison: unrecognized object on left",
+                )),
             },
-            _ => Err(String::from("cannot do comparsion: unrecognized object on left")),
+            _ => Err(String::from(
+                "cannot do comparsion: unrecognized object on left",
+            )),
         }
     }
 
@@ -365,7 +373,9 @@ mod test {
                     Some(as_arr) => {
                         for (i, obj) in val.iter().enumerate() {
                             match obj {
-                                object::Object::Integer(int_val) => assert!(int_val.clone() == as_arr[i]),
+                                object::Object::Integer(int_val) => {
+                                    assert!(int_val.clone() == as_arr[i])
+                                }
                                 _ => assert!(false),
                             }
                         }
@@ -628,7 +638,7 @@ mod test {
             VmTestcase {
                 input: "[1 + 2, 3 * 4, 5 + 6]".to_owned(),
                 expected: vec![3, 12, 11],
-            }
+            },
         ];
 
         run_vm_tests(tests);
