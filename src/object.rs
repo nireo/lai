@@ -4,13 +4,13 @@ use crate::{ast::{self, FunctionParamNode}, opcode::{self, Inst}};
 // through a virtual machine.
 
 // use a generic definition for objects that only need to hold a single value.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FunctionObject {
     pub params: Vec<FunctionParamNode>,
     pub body: ast::BlockNode,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CompiledFunction {
     pub instructions: opcode::Inst,
 }
@@ -23,7 +23,7 @@ impl CompiledFunction {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Object {
     Integer(i32),
     String(String),

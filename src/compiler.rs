@@ -124,8 +124,16 @@ impl Compiler {
             }
             ast::Node::Statement(st) => match *st {
                 ast::Statement::Expression(exp) => {
-                    self.compile(ast::Node::Expression(Box::new(exp.value)))?;
-                    self.emit_single(OP_POP);
+                    self.compile(ast::Node::Expression(Box::new(exp.value.clone())))?;
+
+                    match &exp.value {
+                        ast::Expression::Function(_) => {
+                            return Ok(())
+                        }
+                        _ => {
+                            self.emit_single(OP_POP)
+                        }
+                    };
                 }
                 ast::Statement::Block(exp) => {
                     for st in exp.statements.iter() {
@@ -831,7 +839,7 @@ mod test {
     #[test]
     fn test_function() {
         let tests = vec![CompilerTestcase {
-            input: "fn func(int x) -> int { 5 + 10 }".to_owned(),
+            input: "fn func(int x) -> int { 5 + 10 };".to_owned(),
             expected_consts: vec![
                 object::Object::Integer(5),
                 object::Object::Integer(10),
@@ -845,7 +853,7 @@ mod test {
                     .clone(),
                 )),
             ],
-            expected_insts: vec![make(OP_CONSTANT, 2).unwrap(), make(OP_SET_GLOBAL, 0).unwrap(), make_simple(OP_POP)],
+            expected_insts: vec![make(OP_CONSTANT, 2).unwrap(), make(OP_SET_GLOBAL, 0).unwrap()],
         }];
 
         run_compiler_test(tests);
@@ -854,7 +862,7 @@ mod test {
     #[test]
     fn function_without_arguments() {
         let tests = vec![CompilerTestcase {
-            input: "fn func() -> void { }".to_owned(),
+            input: "fn func() -> void { };".to_owned(),
             expected_consts: vec![object::Object::CompiledFunction(
                 object::CompiledFunction::new(
                     concat_instructions(&vec![make_simple(OP_RETURN)]).clone(),
@@ -863,7 +871,6 @@ mod test {
             expected_insts: vec![
                 make(OP_CONSTANT, 0).unwrap(),
                 make(OP_SET_GLOBAL, 0).unwrap(),
-                make_simple(OP_POP),
             ],
         }];
 
@@ -873,24 +880,6 @@ mod test {
     #[test]
     fn function_calls() {
         let tests = vec![
-            // CompilerTestcase {
-            //     input: "fn func() -> int { 24 }();".to_owned(),
-            //     expected_consts: vec![
-            //         object::Object::Integer(24),
-            //         object::Object::CompiledFunction(object::CompiledFunction::new(
-            //             concat_instructions(&vec![
-            //                 make(OP_CONSTANT, 0).unwrap(),
-            //                 make_simple(OP_RETURN_VALUE),
-            //             ])
-            //             .clone(),
-            //         )),
-            //     ],
-            //     expected_insts: vec![
-            //         make(OP_CONSTANT, 1).unwrap(),
-            //         make_simple(OP_CALL),
-            //         make_simple(OP_POP),
-            //     ],
-            // },
             CompilerTestcase {
                 input: "fn func() -> int { 24 }; func();".to_owned(),
                 expected_consts: vec![
@@ -906,7 +895,6 @@ mod test {
                 expected_insts: vec![
                     make(OP_CONSTANT, 1).unwrap(),
                     make(OP_SET_GLOBAL, 0).unwrap(),
-                    make_simple(OP_POP),
                     make(OP_GET_GLOBAL, 0).unwrap(),
                     make_simple(OP_CALL),
                     make_simple(OP_POP),

@@ -1,9 +1,9 @@
 use crate::{
     object,
     opcode::{
-        Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_GLOBAL,
-        OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_SET_GLOBAL,
-        OP_SUB, OP_TRUE,
+        Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
+        OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
+        OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE,
     },
 };
 
@@ -16,9 +16,9 @@ pub struct VM {
     globals: Vec<object::Object>,
     last: object::Object,
     frames: Vec<Frame>,
-    frame_index: usize,
 }
 
+#[derive(Clone)]
 struct Frame {
     ip: usize,
     func: object::CompiledFunction,
@@ -39,11 +39,12 @@ impl VM {
         let mut globals = Vec::with_capacity(GLOBALS_SIZE);
         globals.resize_with(GLOBALS_SIZE, Default::default);
 
-        let mut frames = Vec::new();
         let main_frame = Frame::new(object::CompiledFunction {
             instructions: insts,
         });
+        let mut frames = Vec::with_capacity(1024);
         frames.push(main_frame);
+
 
         Self {
             stack: Vec::new(),
@@ -51,8 +52,20 @@ impl VM {
             last: object::Object::Null,
             globals,
             frames,
-            frame_index: 0,
         }
+    }
+
+   fn current_frame(&mut self) -> &mut Frame {
+        let i = self.frames.len() - 1;
+        self.frames.get_mut(i).unwrap()
+    }
+
+    fn pop_frame(&mut self) -> Option<Frame> {
+        self.frames.pop()
+    }
+
+    fn push_frame(&mut self, f: Frame) {
+        self.frames.push(f);
     }
 
     pub fn stack_top(&self) -> Option<object::Object> {
@@ -69,7 +82,7 @@ impl VM {
 
     pub fn run(&mut self) -> Result<(), String> {
         while self.current_frame().ip < self.current_frame().instructions().0.len() {
-            let ip = self.frames[self.frame_index].ip;
+            let ip = self.current_frame().ip;
             let ins = self.current_frame().instructions();
             let op = ins.0[ip].clone();
 
@@ -77,64 +90,64 @@ impl VM {
                 OP_CONSTANT => {
                     let const_index = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
                     self.push(self.constants[const_index].clone())?;
-                    self.frames[self.frame_index].ip += 3;
+                    self.current_frame().ip += 3;
                 }
                 OP_ADD | OP_MUL | OP_SUB | OP_DIV => {
                     self.bin_operation(op)?;
-                    self.frames[self.frame_index].ip += 1;
+                    self.current_frame().ip += 1;
                 }
                 OP_POP => {
                     self.last = self.pop()?;
-                    self.frames[self.frame_index].ip += 1;
+                    self.current_frame().ip += 1;
                 }
                 OP_TRUE | OP_FALSE => {
                     self.push(object::Object::Bool(op == OP_TRUE))?;
-                    self.frames[self.frame_index].ip += 1;
+                    self.current_frame().ip += 1;
                 }
                 OP_EQ | OP_NE | OP_GT => {
                     self.comparison(op)?;
-                    self.frames[self.frame_index].ip += 1;
+                    self.current_frame().ip += 1;
                 }
                 OP_BANG => {
                     self.bang_operation()?;
-                    self.frames[self.frame_index].ip += 1;
+                    self.current_frame().ip += 1;
                 }
                 OP_MINUS => {
                     self.minus_operation()?;
-                    self.frames[self.frame_index].ip += 1;
+                    self.current_frame().ip += 1;
                 }
                 OP_JMP => {
                     let pos = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip = pos;
+                    self.current_frame().ip = pos;
                 }
                 OP_SET_GLOBAL => {
                     let index = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip += 3;
+                    self.current_frame().ip += 3;
 
                     self.globals[index] = self.pop()?;
                 }
                 OP_GET_GLOBAL => {
                     let index = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip += 3;
+                    self.current_frame().ip += 3;
 
                     self.push(self.globals[index].clone())?;
                 }
                 OP_JMPNT => {
                     let pos = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip += 3;
+                    self.current_frame().ip += 3;
 
                     let condition = self.pop()?;
                     if !VM::is_truthy(&condition) {
-                        self.frames[self.frame_index].ip = pos;
+                        self.current_frame().ip = pos;
                     }
                 }
                 OP_NULL => {
                     self.push(object::Object::Null)?;
-                    self.frames[self.frame_index].ip += 1;
+                    self.current_frame().ip += 1;
                 }
                 OP_ARRAY => {
                     let element_count = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
-                    self.frames[self.frame_index].ip += 3;
+                    self.current_frame().ip += 3;
 
                     let mut array_elements: Vec<object::Object> = Vec::new();
                     array_elements.resize(element_count, object::Object::Null);
@@ -144,6 +157,24 @@ impl VM {
                     }
 
                     self.push(object::Object::Array(array_elements))?;
+                }
+                OP_CALL => {
+                    let func = self.stack[self.stack.len() - 1].clone();
+                    let frame = match &func {
+                        object::Object::CompiledFunction(val) => Frame::new(val.clone()),
+                        _ => {
+                            println!("{:?} stack size: {}, first: {:?}", func, self.stack.len(), self.stack[0]);
+                            return Err(String::from("calling a non-function"))
+                        }
+                    };
+                    self.push_frame(frame);
+                }
+                OP_RETURN_VALUE => {
+                    let return_value = self.pop()?;
+                    self.pop_frame();
+
+                    self.pop()?;
+                    self.push(return_value)?;
                 }
                 OP_INDEX => {
                     let idx = self.pop()?;
@@ -171,17 +202,13 @@ impl VM {
                         _ => return Err(String::from("indexing only works on arrays")),
                     };
 
-                    self.frames[self.frame_index].ip += 1;
+                    self.current_frame().ip += 1;
                 }
-                _ => self.frames[self.frame_index].ip += 1,
+                _ => self.current_frame().ip += 1,
             };
         }
 
         Ok(())
-    }
-
-    fn current_frame(&self) -> &Frame {
-        &self.frames[self.frame_index]
     }
 
     fn is_truthy(obj: &object::Object) -> bool {
@@ -303,7 +330,6 @@ impl VM {
 
     fn pop(&mut self) -> Result<object::Object, String> {
         if self.stack.len() == 0 {
-            println!("popped");
             // stack empty
             Err(String::from("cannot pop: stack is empty."))
         } else {
@@ -663,6 +689,16 @@ mod test {
                 expected: 1,
             },
         ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn test_function_wo_arguments() {
+        let tests = vec![VmTestcase {
+            input: "fn func() -> int {  1 }; func();".to_owned(),
+            expected: 1,
+        }];
 
         run_vm_tests(tests);
     }
