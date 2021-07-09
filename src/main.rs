@@ -21,7 +21,7 @@ fn main() {
 
         let mut compiler = compiler::Compiler::new();
         let res = compiler.compile(root_node);
-        assert!(!res.is_none());
+        assert!(!res.is_err());
 
         let mut vm = vm::VM::new(compiler.consts, compiler.insts);
 

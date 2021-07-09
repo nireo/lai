@@ -339,7 +339,10 @@ mod test {
             let mut compiler = compiler::Compiler::new();
             let res = compiler.compile(root_node);
 
-            assert!(!res.is_none());
+            if res.is_err() {
+                println!("test {} failed: {}", idx, res.as_ref().err().unwrap());
+            }
+            assert!(!res.is_err());
 
             let instructions = compiler.get_insts().clone();
             let mut vm = VM::new(compiler.consts, instructions);

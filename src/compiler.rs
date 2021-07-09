@@ -41,8 +41,13 @@ impl SymbolTable {
         }
     }
 
-    fn resolve(&self, name: String) -> Option<&Symbol> {
-        self.store.get(&name)
+    fn resolve(&self, name: String) -> Result<&Symbol, String> {
+        let found = self.store.get(&name);
+        if found.is_none() {
+            Err(String::from(format!("symbol with name '{}' was not found", name)))
+        } else {
+            Ok(found.unwrap())
+        }
     }
 
     fn define(&mut self, name: String, value_type: Token) -> &Symbol {
@@ -110,26 +115,22 @@ impl Compiler {
         &self.scopes[self.scope_index].instructions
     }
 
-    pub fn compile(&mut self, node: ast::Node) -> Option<()> {
+    pub fn compile(&mut self, node: ast::Node) -> Result<(), String> {
         match node {
             ast::Node::Root(value) => {
                 for st in value.statements.iter() {
                     self.compile(ast::Node::Statement(Box::new(st.clone())))?;
                 }
-                Some(())
             }
             ast::Node::Statement(st) => match *st {
                 ast::Statement::Expression(exp) => {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
                     self.emit_single(OP_POP);
-
-                    Some(())
                 }
                 ast::Statement::Block(exp) => {
                     for st in exp.statements.iter() {
                         self.compile(ast::Node::Statement(Box::new(st.clone())))?;
                     }
-                    Some(())
                 }
                 ast::Statement::Assigment(exp) => {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
@@ -137,12 +138,10 @@ impl Compiler {
                     let index = symbol.index;
                     self.emit(OP_SET_GLOBAL, index);
 
-                    Some(())
                 }
                 ast::Statement::Return(exp) => {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
                     self.emit_single(OP_RETURN_VALUE);
-                    Some(())
                 }
             },
             ast::Node::Expression(exp) => match *exp {
@@ -150,16 +149,12 @@ impl Compiler {
                     let str_const = object::Object::String(exp.value.clone());
                     let pos = self.add_constant(str_const);
                     self.emit(OP_CONSTANT, pos);
-
-                    Some(())
                 }
                 ast::Expression::Array(exp) => {
                     for elem in exp.elements.iter() {
                         self.compile(ast::Node::Expression(Box::new(elem.clone())))?;
                     }
                     self.emit(OP_ARRAY, exp.elements.len());
-
-                    Some(())
                 }
                 ast::Expression::Infix(e) => {
                     if e.operator == Token::LessThan {
@@ -179,16 +174,13 @@ impl Compiler {
                             Token::GreaterThan => self.emit_single(OP_GT),
                             Token::Equals => self.emit_single(OP_EQ),
                             Token::NEquals => self.emit_single(OP_NE),
-                            _ => return None, // non recognized/supported operator
+                            _ => return Err(String::from("infix operator is not recognised.")), // non recognized/supported operator
                         };
                     }
-                    Some(())
                 }
                 ast::Expression::FunctionCall(exp) => {
                     self.compile(ast::Node::Expression(exp.func))?;
                     self.emit_single(OP_CALL);
-
-                    Some(())
                 }
                 ast::Expression::Function(exp) => {
                     self.enter_scope();
@@ -216,30 +208,24 @@ impl Compiler {
 
                     let name = match &*exp.identifier {
                         ast::Expression::Identifier(val) => val.name.clone(),
-                        _ => return None,
+                        _ => return Err(String::from("function identifier is not valid")),
                     };
 
                     let symbol = self.symbol_table.define(name, exp.return_type);
                     let index = symbol.index;
                     self.emit(OP_SET_GLOBAL, index);
-
-                    Some(())
                 }
                 ast::Expression::Index(exp) => {
                     self.compile(ast::Node::Expression(exp.lhs))?;
                     self.compile(ast::Node::Expression(exp.index))?;
 
                     self.emit_single(OP_INDEX);
-
-                    Some(())
                 }
                 ast::Expression::Identifier(exp) => {
                     let symbol = self.symbol_table.resolve(exp.name)?;
                     // we need to store this in a variable because otherwise the compiler doesn't like it
                     let index = symbol.index;
                     self.emit(OP_GET_GLOBAL, index);
-
-                    Some(())
                 }
                 ast::Expression::If(e) => {
                     self.compile(ast::Node::Expression(e.cond))?;
@@ -267,15 +253,11 @@ impl Compiler {
 
                     let after_other = self.current_instructions().0.len();
                     self.change_operand(jmp_pos, after_other);
-
-                    Some(())
                 }
                 ast::Expression::Integer(e) => {
                     let int_obj = object::Object::Integer(e.value);
                     let pos = self.add_constant(int_obj);
                     self.emit(OP_CONSTANT, pos);
-
-                    Some(())
                 }
                 ast::Expression::Boolean(e) => {
                     if e.value {
@@ -283,8 +265,6 @@ impl Compiler {
                     } else {
                         self.emit_single(OP_FALSE);
                     }
-
-                    Some(())
                 }
                 ast::Expression::Prefix(e) => {
                     self.compile(ast::Node::Expression(e.rhs))?;
@@ -292,14 +272,13 @@ impl Compiler {
                     match &e.operator {
                         Token::Exclamation => self.emit_single(OP_BANG),
                         Token::Minus => self.emit_single(OP_MINUS),
-                        _ => return None, // unregocnized error
+                        _ => return Err(String::from("prefix expressions only support the operators '-' and '!'")), // unregocnized error
                     };
-
-                    Some(())
                 }
-                _ => None,
-            },
-        }
+                _ => return Err(String::from("compiler does not support this statement/expression")),
+            }
+        };
+        Ok(())
     }
 
     fn set_last_instruction(&mut self, opcode: u8, pos: usize) {
@@ -498,7 +477,7 @@ mod test {
 
             let mut compiler = Compiler::new();
             let res = compiler.compile(root_node);
-            assert!(!res.is_none());
+            assert!(!res.is_err());
 
             let consts = compiler.get_consts().to_owned();
             test_constants(tt.expected_consts.clone(), &consts);
@@ -754,7 +733,7 @@ mod test {
         let to_test = ["a", "b"];
         for (i, name) in to_test.iter().enumerate() {
             let res = global.resolve(name.to_string());
-            assert!(!res.is_none());
+            assert!(!res.is_err());
 
             let res = res.unwrap();
             assert_eq!(res.value_type, Token::Integer);
