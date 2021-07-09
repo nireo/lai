@@ -4,6 +4,7 @@ pub mod object;
 pub mod opcode;
 pub mod parser;
 pub mod scanner;
+pub mod regvm;
 pub mod vm;
 use std::io::{self, BufRead};
 

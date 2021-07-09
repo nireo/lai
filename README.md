@@ -12,7 +12,7 @@ fn fib(int n) -> int {
     }
 
     return fib(n-1)+fib(n-2);
-}
+};
 
 
 print(fib(terms));
@@ -20,3 +20,4 @@ print(fib(terms));
 
 ## Features
 * Static types
+* Bytecode compiler and virtual machine
