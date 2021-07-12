@@ -19,7 +19,7 @@ pub enum Opcode {
     LTE,
     LT,
     GT,
-    JMPE,
+    JEQ,
     NOP,
 }
 
@@ -41,7 +41,7 @@ impl From<u8> for Opcode {
             13 => Opcode::GT,
             14 => Opcode::LTE,
             15 => Opcode::LT,
-            16 => Opcode::JMPE,
+            16 => Opcode::JEQ,
             17 => Opcode::NOP,
 
             _ => Opcode::IGL,
@@ -201,7 +201,7 @@ impl VM {
 
                 self.next_8_bits();
             }
-            Opcode::JMPE => {
+            Opcode::JEQ => {
                 let register = self.next_8_bits() as usize;
                 let target = self.registers[register];
                 if self.equal_flag {

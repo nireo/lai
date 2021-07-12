@@ -175,6 +175,7 @@ impl VM {
 
                     self.pop()?;
                     self.push(return_value)?;
+                    self.current_frame().ip += 1;
                 }
                 OP_INDEX => {
                     let idx = self.pop()?;
@@ -319,6 +320,7 @@ impl VM {
     }
 
     fn push(&mut self, obj: object::Object) -> Result<(), String> {
+        println!("pushing {:?}", obj);
         if self.stack.len() >= STACK_SIZE {
             // stack overflow
             Err(String::from("cannot push: stack overflow"))
@@ -329,6 +331,7 @@ impl VM {
     }
 
     fn pop(&mut self) -> Result<object::Object, String> {
+        println!("popping");
         if self.stack.len() == 0 {
             // stack empty
             Err(String::from("cannot pop: stack is empty."))
@@ -696,8 +699,8 @@ mod test {
     #[test]
     fn test_function_wo_arguments() {
         let tests = vec![VmTestcase {
-            input: "fn func() -> int {  1 }; func();".to_owned(),
-            expected: 1,
+            input: "fn func() -> int { 24 }; func();".to_owned(),
+            expected: 24,
         }];
 
         run_vm_tests(tests);
