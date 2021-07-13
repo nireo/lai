@@ -3,7 +3,7 @@ use crate::{
     opcode::{
         Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
         OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
-        OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE,
+        OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE, OP_RETURN,
     },
 };
 
@@ -175,6 +175,12 @@ impl VM {
 
                     self.pop()?;
                     self.push(return_value)?;
+                    self.current_frame().ip += 1;
+                }
+                OP_RETURN => {
+                    self.pop_frame();
+                    self.pop()?;
+                    self.push(object::Object::Null)?;
                     self.current_frame().ip += 1;
                 }
                 OP_INDEX => {
@@ -701,6 +707,16 @@ mod test {
         let tests = vec![VmTestcase {
             input: "fn func() -> int { 24 }; func();".to_owned(),
             expected: 24,
+        }];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn empty_function_return_null() {
+        let tests = vec![VmTestcase {
+            input: "fn func() -> void { }; func();".to_owned(),
+            expected: object::Object::Null,
         }];
 
         run_vm_tests(tests);
