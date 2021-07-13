@@ -4,8 +4,9 @@ use crate::{
     ast, object,
     opcode::{
         make, make_simple, Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ,
-        OP_FALSE, OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE,
-        OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE,
+        OP_FALSE, OP_GET_GLOBAL, OP_GET_LOCAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL,
+        OP_NE, OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SET_LOCAL, OP_SUB,
+        OP_TRUE,
     },
     scanner::{self, Token},
 };
@@ -13,6 +14,7 @@ use crate::{
 #[derive(PartialEq, Debug)]
 pub enum Scope {
     Global,
+    Local,
 }
 
 pub struct CompilationScope {
@@ -31,6 +33,8 @@ pub struct Symbol {
 struct SymbolTable {
     pub store: HashMap<String, Symbol>,
     pub definition_count: usize,
+
+    outer: Option<Box<SymbolTable>>,
 }
 
 impl SymbolTable {
@@ -38,23 +42,46 @@ impl SymbolTable {
         Self {
             definition_count: 0,
             store: HashMap::new(),
+            outer: None,
+        }
+    }
+
+    pub fn new_inner(outer: Box<SymbolTable>) -> Self {
+        Self {
+            outer: Some(outer),
+            definition_count: 0,
+            store: HashMap::new(),
         }
     }
 
     fn resolve(&self, name: String) -> Result<&Symbol, String> {
-        let found = self.store.get(&name);
-        if found.is_none() {
-            Err(String::from(format!("symbol with name '{}' was not found", name)))
+        if let Some(symbol) = self.store.get(&name) {
+            Ok(symbol)
         } else {
-            Ok(found.unwrap())
+            if let Some(outer) = &mut self.outer {
+                if let Ok(outer_symbol) = outer.resolve(name.clone()) {
+                    Ok(outer_symbol)
+                }
+            }
+
+            Err(String::from(format!(
+                "symbol with name '{}' was not found",
+                name
+            )))
         }
     }
 
     fn define(&mut self, name: String, value_type: Token) -> &Symbol {
+        let scope = if self.outer.is_none() {
+            Scope::Global
+        } else {
+            Scope::Local
+        };
+
         let symbol = Symbol {
             name: name.clone(),
             index: self.definition_count,
-            scope: Scope::Global,
+            scope,
             value_type,
         };
 
@@ -127,12 +154,8 @@ impl Compiler {
                     self.compile(ast::Node::Expression(Box::new(exp.value.clone())))?;
 
                     match &exp.value {
-                        ast::Expression::Function(_) => {
-                            return Ok(())
-                        }
-                        _ => {
-                            self.emit_single(OP_POP)
-                        }
+                        ast::Expression::Function(_) => return Ok(()),
+                        _ => self.emit_single(OP_POP),
                     };
                 }
                 ast::Statement::Block(exp) => {
@@ -145,7 +168,6 @@ impl Compiler {
                     let symbol = self.symbol_table.define(exp.name, exp.variable_type);
                     let index = symbol.index;
                     self.emit(OP_SET_GLOBAL, index);
-
                 }
                 ast::Statement::Return(exp) => {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
@@ -280,11 +302,19 @@ impl Compiler {
                     match &e.operator {
                         Token::Exclamation => self.emit_single(OP_BANG),
                         Token::Minus => self.emit_single(OP_MINUS),
-                        _ => return Err(String::from("prefix expressions only support the operators '-' and '!'")), // unregocnized error
+                        _ => {
+                            return Err(String::from(
+                                "prefix expressions only support the operators '-' and '!'",
+                            ))
+                        } // unregocnized error
                     };
                 }
-                _ => return Err(String::from("compiler does not support this statement/expression")),
-            }
+                _ => {
+                    return Err(String::from(
+                        "compiler does not support this statement/expression",
+                    ))
+                }
+            },
         };
         Ok(())
     }
@@ -752,6 +782,55 @@ mod test {
     }
 
     #[test]
+    fn symbol_resolve_local() {
+        struct SymbolTestcase {
+            scope: Scope,
+            index: usize,
+            name: String,
+        }
+
+        let mut global = SymbolTable::new();
+        global.define("a".to_owned(), Token::Integer);
+        global.define("b".to_owned(), Token::Integer);
+
+        let mut local = SymbolTable::new_inner(Box::new(global));
+        local.define("c".to_owned(), Token::Integer);
+        local.define("d".to_owned(), Token::Integer);
+
+        let expected = vec![
+            SymbolTestcase {
+                scope: Scope::Global,
+                index: 0,
+                name: "a".to_string(),
+            },
+            SymbolTestcase {
+                scope: Scope::Global,
+                index: 1,
+                name: "b".to_string(),
+            },
+            SymbolTestcase {
+                scope: Scope::Local,
+                index: 0,
+                name: "c".to_string(),
+            },
+            SymbolTestcase {
+                scope: Scope::Local,
+                index: 1,
+                name: "d".to_string(),
+            },
+        ];
+
+        for sym in expected.iter() {
+            let res = local.resolve(sym.name.clone());
+            assert!(res.is_ok());
+
+            let res = res.unwrap();
+            assert_eq!(res.scope, sym.scope);
+            assert_eq!(res.index, sym.index);
+        }
+    }
+
+    #[test]
     fn test_string_expression() {
         let tests = vec![
             CompilerTestcase {
@@ -853,7 +932,10 @@ mod test {
                     .clone(),
                 )),
             ],
-            expected_insts: vec![make(OP_CONSTANT, 2).unwrap(), make(OP_SET_GLOBAL, 0).unwrap()],
+            expected_insts: vec![
+                make(OP_CONSTANT, 2).unwrap(),
+                make(OP_SET_GLOBAL, 0).unwrap(),
+            ],
         }];
 
         run_compiler_test(tests);
@@ -879,28 +961,57 @@ mod test {
 
     #[test]
     fn function_calls() {
-        let tests = vec![
-            CompilerTestcase {
-                input: "fn func() -> int { 24 }; func();".to_owned(),
-                expected_consts: vec![
-                    object::Object::Integer(24),
-                    object::Object::CompiledFunction(object::CompiledFunction::new(
-                        concat_instructions(&vec![
-                            make(OP_CONSTANT, 0).unwrap(),
-                            make_simple(OP_RETURN_VALUE),
-                        ])
-                        .clone(),
-                    )),
-                ],
-                expected_insts: vec![
-                    make(OP_CONSTANT, 1).unwrap(),
-                    make(OP_SET_GLOBAL, 0).unwrap(),
-                    make(OP_GET_GLOBAL, 0).unwrap(),
-                    make_simple(OP_CALL),
-                    make_simple(OP_POP),
-                ],
-            },
-        ];
+        let tests = vec![CompilerTestcase {
+            input: "fn func() -> int { 24 }; func();".to_owned(),
+            expected_consts: vec![
+                object::Object::Integer(24),
+                object::Object::CompiledFunction(object::CompiledFunction::new(
+                    concat_instructions(&vec![
+                        make(OP_CONSTANT, 0).unwrap(),
+                        make_simple(OP_RETURN_VALUE),
+                    ])
+                    .clone(),
+                )),
+            ],
+            expected_insts: vec![
+                make(OP_CONSTANT, 1).unwrap(),
+                make(OP_SET_GLOBAL, 0).unwrap(),
+                make(OP_GET_GLOBAL, 0).unwrap(),
+                make_simple(OP_CALL),
+                make_simple(OP_POP),
+            ],
+        }];
+
+        run_compiler_test(tests);
+    }
+
+    #[test]
+    fn function_local_bindings() {
+        let tests = vec![CompilerTestcase {
+            input: "fn func() -> int { int x = 55; int y = 77; x + y };".to_owned(),
+            expected_consts: vec![
+                object::Object::Integer(55),
+                object::Object::Integer(77),
+                object::Object::CompiledFunction(object::CompiledFunction::new(
+                    concat_instructions(&vec![
+                        make(OP_CONSTANT, 0).unwrap(),
+                        make(OP_SET_LOCAL, 0).unwrap(),
+                        make(OP_CONSTANT, 1).unwrap(),
+                        make(OP_SET_LOCAL, 1).unwrap(),
+                        make(OP_GET_LOCAL, 0).unwrap(),
+                        make(OP_GET_LOCAL, 1).unwrap(),
+                        make_simple(OP_ADD),
+                        make_simple(OP_RETURN_VALUE),
+                    ])
+                    .clone(),
+                )),
+            ],
+            expected_insts: vec![
+                make(OP_CONSTANT, 2).unwrap(),
+                make(OP_SET_GLOBAL, 0).unwrap(),
+                make_simple(OP_POP),
+            ],
+        }];
 
         run_compiler_test(tests);
     }

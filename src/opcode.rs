@@ -23,6 +23,8 @@ pub const OP_INDEX: u8 = 19;
 pub const OP_CALL: u8 = 20;
 pub const OP_RETURN_VALUE: u8 = 21;
 pub const OP_RETURN: u8 = 22;
+pub const OP_GET_LOCAL: u8 = 23;
+pub const OP_SET_LOCAL: u8 = 24;
 
 #[derive(Clone, Debug)]
 pub struct Inst(pub Vec<u8>);
@@ -32,28 +34,13 @@ pub struct Inst(pub Vec<u8>);
 fn get_definition(opcode: u8) -> usize {
     match opcode {
         OP_CONSTANT => 2,
-        OP_ADD => 0,
-        OP_POP => 0,
-        OP_DIV => 0,
-        OP_MUL => 0,
-        OP_SUB => 0,
-        OP_TRUE => 0,
-        OP_FALSE => 0,
-        OP_EQ => 0,
-        OP_NE => 0,
-        OP_GT => 0,
-        OP_MINUS => 0,
-        OP_BANG => 0,
         OP_JMPNT => 2,
         OP_JMP => 2,
-        OP_NULL => 0,
         OP_GET_GLOBAL => 2,
         OP_SET_GLOBAL => 2,
         OP_ARRAY => 2,
-        OP_INDEX => 0,
-        OP_CALL => 0,
-        OP_RETURN_VALUE => 0,
-        OP_RETURN => 0,
+        OP_GET_LOCAL => 1,
+        OP_SET_LOCAL => 1,
         _ => 0,
     }
 }
@@ -65,6 +52,7 @@ pub fn make(opcode: u8, operand: usize) -> Option<Inst> {
 
     match wanted_width {
         2 => inst.extend_from_slice(&(operand as u16).to_be_bytes()),
+        1 => inst.push(operand as u8),
         0 => return Some(Inst(inst)),
         _ => return None,
     };
@@ -84,6 +72,9 @@ pub fn read_operand(operand_width: usize, insts: &[u8]) -> (usize, usize) {
         2 => {
             // this is so fucking bad
             (((insts[0] as u16) << 8) | insts[1] as u16) as usize
+        }
+        1 => {
+            insts[0] as usize
         }
         _ => 0,
     };
@@ -110,11 +101,18 @@ mod tests {
             pub expected_insts: Vec<u8>,
         }
 
-        let expected = vec![MakeTestcase {
-            op: OP_CONSTANT,
-            operand: 65534,
-            expected_insts: vec![OP_CONSTANT, 255, 254],
-        }];
+        let expected = vec![
+            MakeTestcase {
+                op: OP_CONSTANT,
+                operand: 65534,
+                expected_insts: vec![OP_CONSTANT, 255, 254],
+            },
+            MakeTestcase {
+                op: OP_GET_LOCAL,
+                operand: 255,
+                expected_insts: vec![OP_GET_LOCAL, 255],
+            },
+        ];
 
         for tt in expected.iter() {
             let inst = make(tt.op, tt.operand);
@@ -137,11 +135,18 @@ mod tests {
             pub bytes_read: usize,
         }
 
-        let tests = vec![ReadOperandTestcase {
-            op: OP_CONSTANT,
-            operand: 65535,
-            bytes_read: 2,
-        }];
+        let tests = vec![
+            ReadOperandTestcase {
+                op: OP_CONSTANT,
+                operand: 65535,
+                bytes_read: 2,
+            },
+            ReadOperandTestcase {
+                op: OP_GET_LOCAL,
+                operand: 255,
+                bytes_read: 1,
+            },
+        ];
 
         for tt in tests.iter() {
             let inst = make(tt.op, tt.operand);
