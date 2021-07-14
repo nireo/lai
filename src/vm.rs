@@ -326,7 +326,6 @@ impl VM {
     }
 
     fn push(&mut self, obj: object::Object) -> Result<(), String> {
-        println!("pushing {:?}", obj);
         if self.stack.len() >= STACK_SIZE {
             // stack overflow
             Err(String::from("cannot push: stack overflow"))
@@ -337,7 +336,6 @@ impl VM {
     }
 
     fn pop(&mut self) -> Result<object::Object, String> {
-        println!("popping");
         if self.stack.len() == 0 {
             // stack empty
             Err(String::from("cannot pop: stack is empty."))

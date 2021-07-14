@@ -11,7 +11,7 @@ use crate::{
     scanner::{self, Token},
 };
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Scope {
     Global,
     Local,
@@ -23,6 +23,7 @@ pub struct CompilationScope {
     pub prev_inst: EmittedInstruction,
 }
 
+#[derive(Clone)]
 pub struct Symbol {
     pub name: String,
     pub scope: Scope,
@@ -30,6 +31,7 @@ pub struct Symbol {
     pub value_type: scanner::Token,
 }
 
+#[derive(Clone)]
 struct SymbolTable {
     pub store: HashMap<String, Symbol>,
     pub definition_count: usize,
@@ -54,28 +56,28 @@ impl SymbolTable {
         }
     }
 
-    fn resolve(&self, name: String) -> Result<&Symbol, String> {
+    fn resolve(&mut self, name: String) -> Result<&Symbol, String> {
         if let Some(symbol) = self.store.get(&name) {
             Ok(symbol)
         } else {
             if let Some(outer) = &mut self.outer {
                 if let Ok(outer_symbol) = outer.resolve(name.clone()) {
-                    Ok(outer_symbol)
+                    return Ok(outer_symbol);
                 }
             }
 
             Err(String::from(format!(
-                "symbol with name '{}' was not found",
+                "variable with name '{}' is not defined",
                 name
             )))
         }
     }
 
-    fn define(&mut self, name: String, value_type: Token) -> &Symbol {
-        let scope = if self.outer.is_none() {
-            Scope::Global
-        } else {
+    fn define(&mut self, name: String, value_type: Token) -> Symbol {
+        let scope = if let Some(_) = &self.outer {
             Scope::Local
+        } else {
+            Scope::Global
         };
 
         let symbol = Symbol {
@@ -85,11 +87,10 @@ impl SymbolTable {
             value_type,
         };
 
-        self.store.insert(name.clone(), symbol);
+        self.store.insert(name.clone(), symbol.clone());
         self.definition_count += 1;
 
-        // TODO: a better way to do this?
-        self.store.get(&name).unwrap()
+        symbol
     }
 }
 
@@ -164,10 +165,17 @@ impl Compiler {
                     }
                 }
                 ast::Statement::Assigment(exp) => {
+                    println!("this is an assigment statement");
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
                     let symbol = self.symbol_table.define(exp.name, exp.variable_type);
-                    let index = symbol.index;
-                    self.emit(OP_SET_GLOBAL, index);
+                    println!("set symbol");
+                    if symbol.scope == Scope::Global {
+                        let index = symbol.index;
+                        self.emit(OP_SET_GLOBAL, index);
+                    } else {
+                        let index = symbol.index;
+                        self.emit(OP_SET_LOCAL, index);
+                    }
                 }
                 ast::Statement::Return(exp) => {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
@@ -254,8 +262,13 @@ impl Compiler {
                 ast::Expression::Identifier(exp) => {
                     let symbol = self.symbol_table.resolve(exp.name)?;
                     // we need to store this in a variable because otherwise the compiler doesn't like it
-                    let index = symbol.index;
-                    self.emit(OP_GET_GLOBAL, index);
+                    if symbol.scope == Scope::Global {
+                        let index = symbol.index;
+                        self.emit(OP_GET_GLOBAL, index);
+                    } else {
+                        let index = symbol.index;
+                        self.emit(OP_GET_LOCAL, index);
+                    }
                 }
                 ast::Expression::If(e) => {
                     self.compile(ast::Node::Expression(e.cond))?;
@@ -404,11 +417,13 @@ impl Compiler {
 
         self.scopes.push(scope);
         self.scope_index += 1;
+        self.symbol_table = SymbolTable::new_inner(Box::new(self.symbol_table.clone()));
     }
 
     fn leave_scope(&mut self) -> Inst {
         let last = self.scopes.pop().unwrap();
         self.scope_index -= 1;
+        self.symbol_table = *self.symbol_table.outer.as_ref().unwrap().clone();
 
         last.instructions
     }
@@ -515,6 +530,9 @@ mod test {
 
             let mut compiler = Compiler::new();
             let res = compiler.compile(root_node);
+            if res.is_err() {
+                println!("{}", res.as_ref().err().unwrap())
+            }
             assert!(!res.is_err());
 
             let consts = compiler.get_consts().to_owned();
@@ -988,15 +1006,18 @@ mod test {
     #[test]
     fn function_local_bindings() {
         let tests = vec![CompilerTestcase {
-            input: "fn func() -> int { int x = 55; int y = 77; x + y };".to_owned(),
+            input: "fn func() -> int { 0; int x = 10; int y = 77; x + y };".to_owned(),
             expected_consts: vec![
-                object::Object::Integer(55),
+                object::Object::Integer(0),
+                object::Object::Integer(10),
                 object::Object::Integer(77),
                 object::Object::CompiledFunction(object::CompiledFunction::new(
                     concat_instructions(&vec![
                         make(OP_CONSTANT, 0).unwrap(),
-                        make(OP_SET_LOCAL, 0).unwrap(),
+                        make_simple(OP_POP),
                         make(OP_CONSTANT, 1).unwrap(),
+                        make(OP_SET_LOCAL, 0).unwrap(),
+                        make(OP_CONSTANT, 2).unwrap(),
                         make(OP_SET_LOCAL, 1).unwrap(),
                         make(OP_GET_LOCAL, 0).unwrap(),
                         make(OP_GET_LOCAL, 1).unwrap(),
@@ -1007,12 +1028,42 @@ mod test {
                 )),
             ],
             expected_insts: vec![
-                make(OP_CONSTANT, 2).unwrap(),
+                make(OP_CONSTANT, 3).unwrap(),
                 make(OP_SET_GLOBAL, 0).unwrap(),
                 make_simple(OP_POP),
             ],
         }];
 
         run_compiler_test(tests);
+    }
+
+    #[test]
+    fn compiler_scope_test() {
+        let mut compiler = Compiler::new();
+        assert_eq!(compiler.scope_index, 0);
+
+        compiler.emit_single(OP_MUL);
+
+        compiler.enter_scope();
+        assert_eq!(compiler.scope_index, 1);
+
+        compiler.emit_single(OP_SUB);
+        assert_eq!(compiler.scopes[compiler.scope_index].instructions.0.len(), 1);
+
+        let last = compiler.scopes[compiler.scope_index].last_inst.clone();
+        assert_eq!(last.opcode, OP_SUB);
+
+        compiler.leave_scope();
+        assert_eq!(compiler.scope_index, 0);
+        assert!(compiler.symbol_table.outer.is_none());
+
+        compiler.emit_single(OP_ADD);
+        assert_eq!(compiler.scopes[compiler.scope_index].instructions.0.len(), 2);
+
+        let last = compiler.scopes[compiler.scope_index].last_inst.clone();
+        assert_eq!(last.opcode, OP_ADD);
+
+        let prev = compiler.scopes[compiler.scope_index].prev_inst.clone();
+        assert_eq!(prev.opcode, OP_MUL);
     }
 }
