@@ -356,8 +356,9 @@ mod test {
         let mut parser = parser::Parser::new(lexer);
 
         let root_node = parser.parse_root_node();
+        assert!(root_node.is_some());
 
-        ast::Node::Root(Box::new(root_node))
+        ast::Node::Root(Box::new(root_node.unwrap()))
     }
 
     struct VmTestcase<T> {

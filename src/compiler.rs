@@ -181,6 +181,7 @@ impl Compiler {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
                     self.emit_single(OP_RETURN_VALUE);
                 }
+                _ => return Err(String::from("statement type is not supported"))
             },
             ast::Node::Expression(exp) => match *exp {
                 ast::Expression::String(exp) => {
@@ -222,6 +223,7 @@ impl Compiler {
                 }
                 ast::Expression::Function(exp) => {
                     self.enter_scope();
+                    println!("function statement");
                     self.compile(ast::Node::Statement(exp.body))?;
 
                     if self.last_instruction_is(OP_POP) {
@@ -448,8 +450,9 @@ mod test {
         let mut parser = parser::Parser::new(lexer);
 
         let root_node = parser.parse_root_node();
+        assert!(root_node.is_some());
 
-        ast::Node::Root(Box::new(root_node))
+        ast::Node::Root(Box::new(root_node.unwrap()))
     }
 
     fn concat_instructions(instructions: &[Inst]) -> Inst {
@@ -472,6 +475,9 @@ mod test {
     }
 
     fn test_constants<T: Any + 'static>(expected: Vec<T>, actual: &[object::Object]) {
+        for obj in actual.iter() {
+            println!("{}", obj);
+        }
         assert_eq!(expected.len(), actual.len());
 
         for (i, cnst) in expected.iter().enumerate() {
@@ -1006,29 +1012,24 @@ mod test {
     #[test]
     fn function_local_bindings() {
         let tests = vec![CompilerTestcase {
-            input: "fn func() -> int { 0; int x = 10; int y = 77; x + y };".to_owned(),
+            input: "fn func() -> int { ; int x = 10; int y = 77; x };".to_owned(),
             expected_consts: vec![
-                object::Object::Integer(0),
                 object::Object::Integer(10),
                 object::Object::Integer(77),
                 object::Object::CompiledFunction(object::CompiledFunction::new(
                     concat_instructions(&vec![
                         make(OP_CONSTANT, 0).unwrap(),
-                        make_simple(OP_POP),
-                        make(OP_CONSTANT, 1).unwrap(),
                         make(OP_SET_LOCAL, 0).unwrap(),
-                        make(OP_CONSTANT, 2).unwrap(),
+                        make(OP_CONSTANT, 1).unwrap(),
                         make(OP_SET_LOCAL, 1).unwrap(),
                         make(OP_GET_LOCAL, 0).unwrap(),
-                        make(OP_GET_LOCAL, 1).unwrap(),
-                        make_simple(OP_ADD),
                         make_simple(OP_RETURN_VALUE),
                     ])
                     .clone(),
                 )),
             ],
             expected_insts: vec![
-                make(OP_CONSTANT, 3).unwrap(),
+                make(OP_CONSTANT, 2).unwrap(),
                 make(OP_SET_GLOBAL, 0).unwrap(),
                 make_simple(OP_POP),
             ],

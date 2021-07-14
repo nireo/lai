@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::{ast::{self, FunctionParamNode}, opcode::{self, Inst}};
 
 // This file contains definitions for different objects used in running the code
@@ -35,6 +37,23 @@ pub enum Object {
     CompiledFunction(CompiledFunction),
     Error(String),
     Null,
+}
+
+impl fmt::Display for Object {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Object::Integer(_) => write!(f, "integer"),
+            Object::String(_) => write!(f, "string"),
+            Object::Null => write!(f, "null"),
+            Object::Float(_) => write!(f, "float"),
+            Object::Bool(_) => write!(f, "bool"),
+            Object::Return(_) => write!(f, "return"),
+            Object::Function(_) => write!(f, "function"),
+            Object::Array(_) => write!(f, "array"),
+            Object::CompiledFunction(_) => write!(f, "function"),
+            _ => write!(f, "obj"),
+        }
+    }
 }
 
 impl Default for Object {

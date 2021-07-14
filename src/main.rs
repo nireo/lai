@@ -17,7 +17,7 @@ fn main() {
         let lexer = scanner::Scanner::new(&line);
         let mut parser = parser::Parser::new(lexer);
 
-        let root_node = parser.parse_root_node();
+        let root_node = parser.parse_root_node().unwrap();
         let root_node = ast::Node::Root(Box::new(root_node));
 
         let mut compiler = compiler::Compiler::new();

@@ -34,6 +34,7 @@ pub enum Statement {
     Return(ReturnNode),
     Block(BlockNode),
     Expression(ExpressionStatementNode),
+    Function(FunctionNode),
 }
 
 #[derive(Debug, Clone)]
