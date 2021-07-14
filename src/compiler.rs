@@ -181,7 +181,39 @@ impl Compiler {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
                     self.emit_single(OP_RETURN_VALUE);
                 }
-                _ => return Err(String::from("statement type is not supported"))
+                ast::Statement::Function(exp) => {
+                    self.enter_scope();
+                    self.compile(ast::Node::Statement(exp.body))?;
+
+                    if self.last_instruction_is(OP_POP) {
+                        let last_pos = self.scopes[self.scope_index].last_inst.pos;
+                        self.replace_instruction(last_pos, make_simple(OP_RETURN_VALUE).0);
+
+                        self.scopes[self.scope_index].last_inst.opcode = OP_RETURN_VALUE;
+                    }
+
+                    if !self.last_instruction_is(OP_RETURN_VALUE) {
+                        self.emit_single(OP_RETURN);
+                    }
+
+                    let instructions = self.leave_scope();
+
+                    let compiled_function = object::Object::CompiledFunction(
+                        object::CompiledFunction::new(instructions),
+                    );
+
+                    let pos = self.add_constant(compiled_function);
+                    self.emit(OP_CONSTANT, pos);
+
+                    let name = match &*exp.identifier {
+                        ast::Expression::Identifier(val) => val.name.clone(),
+                        _ => return Err(String::from("function identifier is not valid")),
+                    };
+
+                    let symbol = self.symbol_table.define(name, exp.return_type);
+                    let index = symbol.index;
+                    self.emit(OP_SET_GLOBAL, index);
+                }
             },
             ast::Node::Expression(exp) => match *exp {
                 ast::Expression::String(exp) => {
@@ -223,7 +255,6 @@ impl Compiler {
                 }
                 ast::Expression::Function(exp) => {
                     self.enter_scope();
-                    println!("function statement");
                     self.compile(ast::Node::Statement(exp.body))?;
 
                     if self.last_instruction_is(OP_POP) {
@@ -1012,7 +1043,7 @@ mod test {
     #[test]
     fn function_local_bindings() {
         let tests = vec![CompilerTestcase {
-            input: "fn func() -> int { ; int x = 10; int y = 77; x };".to_owned(),
+            input: "fn func() -> int { int x = 10; int y = 77; }".to_owned(),
             expected_consts: vec![
                 object::Object::Integer(10),
                 object::Object::Integer(77),

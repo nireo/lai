@@ -55,6 +55,7 @@ impl Parser {
 
     fn parse_statement(&mut self) -> Option<ast::Statement> {
         match self.current_token {
+            Token::Fn => self.parse_function_statement(),
             Token::Integer | Token::Float | Token::Char | Token::String => {
                 self.parse_assigment_statement()
             }
@@ -150,7 +151,6 @@ impl Parser {
             Token::Exclamation | Token::Minus => self.parse_prefix_expression(),
             Token::True | Token::False => self.parse_boolean_literal(),
             Token::If => self.parse_if_expression(),
-            Token::Fn => self.parse_function_literal(),
             Token::LBracket => self.parse_array_literal(),
             _ => None,
         }
@@ -187,7 +187,6 @@ impl Parser {
         Some(list)
     }
 
-
     fn parse_call_expression(&mut self, func: Box<ast::Expression>) -> Option<ast::Expression> {
         let args = self.parse_call_arguments()?;
 
@@ -221,6 +220,49 @@ impl Parser {
         self.next_token();
 
         Some(arguments)
+    }
+
+    fn parse_function_statement(&mut self) -> Option<ast::Statement> {
+        let identifier = match self.peek_token {
+            Token::Identifier(_) => {
+                self.next_token();
+
+                self.parse_identifier()?
+            }
+            _ => return None,
+        };
+
+        if self.peek_token != Token::LParen {
+            return None;
+        }
+        self.next_token();
+
+        let function_parameters = self.parse_function_parameters()?;
+
+        if self.peek_token != Token::Arrow {
+            return None;
+        }
+        self.next_token();
+
+        if !Parser::is_type_token(&self.peek_token) {
+            return None;
+        }
+        self.next_token();
+        let return_type = self.current_token.clone();
+
+        if self.peek_token != Token::LBrace {
+            return None;
+        }
+        self.next_token();
+
+        let body = Box::new(self.parse_block_statement()?);
+
+        Some(ast::Statement::Function(ast::FunctionNode {
+            params: function_parameters,
+            body,
+            return_type,
+            identifier: Box::new(identifier),
+        }))
     }
 
     fn parse_function_literal(&mut self) -> Option<ast::Expression> {
@@ -494,9 +536,8 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::scanner;
-
     use super::*;
+    use crate::scanner;
 
     fn test_integer_obj(exp: &ast::Expression, expected_value: i32) -> bool {
         match exp {
@@ -637,8 +678,8 @@ mod tests {
             let mut parser = Parser::new(lexer);
 
             let root_node = parser.parse_root_node();
-        assert!(root_node.is_some());
-        let root_node = root_node.unwrap();
+            assert!(root_node.is_some());
+            let root_node = root_node.unwrap();
             assert_eq!(root_node.statements.len(), 1);
 
             let is_correct_type = match &root_node.statements[0] {
@@ -726,8 +767,8 @@ mod tests {
             let mut parser = Parser::new(lexer);
 
             let root_node = parser.parse_root_node();
-        assert!(root_node.is_some());
-        let root_node = root_node.unwrap();
+            assert!(root_node.is_some());
+            let root_node = root_node.unwrap();
             assert_eq!(root_node.statements.len(), 1);
 
             let is_correct_type = match &root_node.statements[0] {
@@ -774,8 +815,8 @@ mod tests {
             let mut parser = Parser::new(lexer);
 
             let root_node = parser.parse_root_node();
-        assert!(root_node.is_some());
-        let root_node = root_node.unwrap();
+            assert!(root_node.is_some());
+            let root_node = root_node.unwrap();
             assert_eq!(root_node.statements.len(), 1);
 
             let is_correct_type = match &root_node.statements[0] {
@@ -832,8 +873,8 @@ mod tests {
             let mut parser = Parser::new(lexer);
 
             let root_node = parser.parse_root_node();
-        assert!(root_node.is_some());
-        let root_node = root_node.unwrap();
+            assert!(root_node.is_some());
+            let root_node = root_node.unwrap();
             assert_eq!(root_node.statements.len(), 1);
 
             let is_correct_type = match &root_node.statements[0] {
@@ -901,19 +942,12 @@ mod tests {
         assert_eq!(root_node.statements.len(), 1);
 
         let is_correct_type = match &root_node.statements[0] {
-            ast::Statement::Expression(val) => {
-                let to_return = match &val.value {
-                    ast::Expression::Function(exp) => {
-                        if exp.return_type != Token::Integer {
-                            false
-                        } else {
-                            true
-                        }
-                    }
-                    _ => false,
-                };
-
-                to_return
+            ast::Statement::Function(exp) => {
+                if exp.return_type != Token::Integer {
+                    false
+                } else {
+                    true
+                }
             }
             _ => false,
         };
@@ -922,7 +956,7 @@ mod tests {
     }
 
     #[test]
-    fn test_function_literal_with_params() {
+    fn test_function_statement_with_params() {
         struct ParamTest {
             pub name: String,
             pub param_type: Token,
@@ -953,31 +987,24 @@ mod tests {
         assert_eq!(root_node.statements.len(), 1);
 
         let is_correct_type = match &root_node.statements[0] {
-            ast::Statement::Expression(val) => {
-                let to_return = match &val.value {
-                    ast::Expression::Function(exp) => {
-                        if exp.return_type != Token::Integer {
-                            false
-                        } else {
-                            let mut ok = true;
-                            for (i, param) in exp.params.iter().enumerate() {
-                                match param {
-                                    ast::Expression::FunctionParam(node) => {
-                                        assert!(expected[i].name == node.name);
-                                        assert!(expected[i].param_type == node.value_type);
-                                    }
-                                    _ => ok = false,
-                                }
+            ast::Statement::Function(exp) => {
+                if exp.return_type != Token::Integer {
+                    false
+                } else {
+                    let mut ok = true;
+                    for (i, param) in exp.params.iter().enumerate() {
+                        match param {
+                            ast::Expression::FunctionParam(node) => {
+                                assert!(expected[i].name == node.name);
+                                assert!(expected[i].param_type == node.value_type);
                             }
-
-                            assert!(ok);
-                            true
+                            _ => ok = false,
                         }
                     }
-                    _ => false,
-                };
 
-                to_return
+                    assert!(ok);
+                    true
+                }
             }
             _ => false,
         };
@@ -1094,7 +1121,7 @@ mod tests {
 
     #[test]
     fn parse_function_assign() {
-        let input = "fn func() -> int { int value = 10; };";
+        let input = "fn func() -> int { return 10; }";
 
         let lexer = scanner::Scanner::new(input);
         let mut parser = Parser::new(lexer);
@@ -1104,14 +1131,7 @@ mod tests {
         let root_node = root_node.unwrap();
 
         let is_correct_type = match &root_node.statements[0] {
-            ast::Statement::Expression(val) => {
-                let to_return = match &val.value {
-                    ast::Expression::Function(_) => true,
-                    _ => false,
-                };
-
-                to_return
-            }
+            ast::Statement::Function(_) => true,
             _ => false,
         };
 
