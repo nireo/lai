@@ -54,6 +54,7 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> Option<ast::Statement> {
+        println!("{:?}", &self.current_token);
         match self.current_token {
             Token::Fn => self.parse_function_statement(),
             Token::Integer | Token::Float | Token::Char | Token::String => {
@@ -64,10 +65,11 @@ impl Parser {
         }
     }
 
+    // int test = 10;
     fn parse_assigment_statement(&mut self) -> Option<ast::Statement> {
         let assigment_type = self.current_token.clone();
-
         self.next_token();
+
         let name: String = match &self.current_token {
             Token::Identifier(value) => value.to_owned().clone(),
             _ => return None,
@@ -80,6 +82,9 @@ impl Parser {
         self.next_token();
 
         let assigment_value = self.parse_expression(Precedence::Lowest)?;
+        if self.peek_token == Token::Semicolon {
+            self.next_token();
+        }
 
         return Some(ast::Statement::Assigment(ast::AssigmentNode {
             value: assigment_value,
@@ -257,50 +262,9 @@ impl Parser {
 
         let body = Box::new(self.parse_block_statement()?);
 
+        println!("function statement");
+
         Some(ast::Statement::Function(ast::FunctionNode {
-            params: function_parameters,
-            body,
-            return_type,
-            identifier: Box::new(identifier),
-        }))
-    }
-
-    fn parse_function_literal(&mut self) -> Option<ast::Expression> {
-        let identifier = match self.peek_token {
-            Token::Identifier(_) => {
-                self.next_token();
-
-                self.parse_identifier()?
-            }
-            _ => return None,
-        };
-
-        if self.peek_token != Token::LParen {
-            return None;
-        }
-        self.next_token();
-
-        let function_parameters = self.parse_function_parameters()?;
-
-        if self.peek_token != Token::Arrow {
-            return None;
-        }
-        self.next_token();
-
-        if !Parser::is_type_token(&self.peek_token) {
-            return None;
-        }
-        self.next_token();
-        let return_type = self.current_token.clone();
-
-        if self.peek_token != Token::LBrace {
-            return None;
-        }
-        self.next_token();
-
-        let body = Box::new(self.parse_block_statement()?);
-
-        Some(ast::Expression::Function(ast::FunctionNode {
             params: function_parameters,
             body,
             return_type,
@@ -1122,6 +1086,25 @@ mod tests {
     #[test]
     fn parse_function_assign() {
         let input = "fn func() -> int { return 10; }";
+
+        let lexer = scanner::Scanner::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let root_node = parser.parse_root_node();
+        assert!(root_node.is_some());
+        let root_node = root_node.unwrap();
+
+        let is_correct_type = match &root_node.statements[0] {
+            ast::Statement::Function(_) => true,
+            _ => false,
+        };
+
+        assert!(is_correct_type);
+    }
+
+    #[test]
+    fn function_assigment_statements_work() {
+        let input = "fn func() -> int { int x = 10; 10 }";
 
         let lexer = scanner::Scanner::new(input);
         let mut parser = Parser::new(lexer);
