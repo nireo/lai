@@ -1043,7 +1043,7 @@ mod test {
     #[test]
     fn function_local_bindings() {
         let tests = vec![CompilerTestcase {
-            input: "fn func() -> int { int x = 10; int y = 77; }".to_owned(),
+            input: "fn func() -> int { int x = 10; int y = 77; return x + y; }".to_owned(),
             expected_consts: vec![
                 object::Object::Integer(10),
                 object::Object::Integer(77),
@@ -1054,6 +1054,8 @@ mod test {
                         make(OP_CONSTANT, 1).unwrap(),
                         make(OP_SET_LOCAL, 1).unwrap(),
                         make(OP_GET_LOCAL, 0).unwrap(),
+                        make(OP_GET_LOCAL, 1).unwrap(),
+                        make_simple(OP_ADD),
                         make_simple(OP_RETURN_VALUE),
                     ])
                     .clone(),
@@ -1062,7 +1064,6 @@ mod test {
             expected_insts: vec![
                 make(OP_CONSTANT, 2).unwrap(),
                 make(OP_SET_GLOBAL, 0).unwrap(),
-                make_simple(OP_POP),
             ],
         }];
 

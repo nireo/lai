@@ -3,7 +3,7 @@ use crate::{
     opcode::{
         Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
         OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
-        OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE, OP_RETURN,
+        OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE,
     },
 };
 
@@ -45,7 +45,6 @@ impl VM {
         let mut frames = Vec::with_capacity(1024);
         frames.push(main_frame);
 
-
         Self {
             stack: Vec::new(),
             constants,
@@ -55,7 +54,7 @@ impl VM {
         }
     }
 
-   fn current_frame(&mut self) -> &mut Frame {
+    fn current_frame(&mut self) -> &mut Frame {
         let i = self.frames.len() - 1;
         self.frames.get_mut(i).unwrap()
     }
@@ -163,8 +162,13 @@ impl VM {
                     let frame = match &func {
                         object::Object::CompiledFunction(val) => Frame::new(val.clone()),
                         _ => {
-                            println!("{:?} stack size: {}, first: {:?}", func, self.stack.len(), self.stack[0]);
-                            return Err(String::from("calling a non-function"))
+                            println!(
+                                "{:?} stack size: {}, first: {:?}",
+                                func,
+                                self.stack.len(),
+                                self.stack[0]
+                            );
+                            return Err(String::from("calling a non-function"));
                         }
                     };
                     self.push_frame(frame);
@@ -717,6 +721,31 @@ mod test {
             input: "fn func() -> void { }; func();".to_owned(),
             expected: object::Object::Null,
         }];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn local_bindings() {
+        let tests = vec![
+            VmTestcase {
+                input: "fn returnsone() -> int { let one = 1; return one; }; returnsone();"
+                    .to_owned(),
+                expected: 1,
+            },
+            VmTestcase {
+                input: "fn xdxd() -> int { let one = 1; let two = 2; return one + two; }"
+                    .to_owned(),
+                expected: 3,
+            },
+            VmTestcase {
+                input: "fn first() -> int { let one = 1; return one; }
+                        fn second() -> int { let two = 2; return two; }
+                        first() + second();"
+                    .to_owned(),
+                expected: 3,
+            },
+        ];
 
         run_vm_tests(tests);
     }
