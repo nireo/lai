@@ -2,8 +2,8 @@ use crate::{
     object,
     opcode::{
         Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
-        OP_GET_GLOBAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP,
-        OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SUB, OP_TRUE, OP_SET_LOCAL, OP_GET_LOCAL
+        OP_GET_GLOBAL, OP_GET_LOCAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE,
+        OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SET_LOCAL, OP_SUB, OP_TRUE,
     },
 };
 
@@ -44,10 +44,7 @@ impl VM {
         let mut globals = Vec::with_capacity(GLOBALS_SIZE);
         globals.resize_with(GLOBALS_SIZE, Default::default);
 
-        let main_frame = Frame::new(
-            object::CompiledFunction::new(insts),
-            0,
-        );
+        let main_frame = Frame::new(object::CompiledFunction::new(insts), 0);
         let mut frames = Vec::with_capacity(1024);
         frames.push(main_frame);
 
@@ -151,14 +148,14 @@ impl VM {
                     self.current_frame().ip += 1;
                 }
                 OP_SET_LOCAL => {
-                    let local_index = u8::from_be_bytes([ins.0[ip+1]]);
+                    let local_index = u8::from_be_bytes([ins.0[ip + 1]]);
                     self.current_frame().ip += 2;
 
                     let base_pointer = self.current_frame().base_pointer;
                     self.stack[base_pointer + local_index as usize] = self.pop()?;
                 }
                 OP_GET_LOCAL => {
-                    let local_index = u8::from_be_bytes([ins.0[ip+1]]);
+                    let local_index = u8::from_be_bytes([ins.0[ip + 1]]);
                     self.current_frame().ip += 2;
 
                     let base_pointer = self.current_frame().base_pointer;
@@ -178,11 +175,23 @@ impl VM {
                     self.push(object::Object::Array(array_elements))?;
                 }
                 OP_CALL => {
+                    let num_args = u8::from_be_bytes([ins.0[ip + 1]]);
                     self.current_frame().ip += 1;
-                    let func = self.stack[self.stack.len() - 1].clone();
+                    let func = self.stack[self.stack.len() - 1 - num_args as usize].clone();
+
                     let (frame, num_locals) = match &func {
                         object::Object::CompiledFunction(val) => {
-                            (Frame::new(val.clone(), self.stack.len()), val.num_locals)
+                            if num_args as usize != val.num_params {
+                                return Err(String::from(format!(
+                                    "wrong amount of arguments got: {} want: {}",
+                                    num_args, val.num_params
+                                )));
+                            }
+
+                            (
+                                Frame::new(val.clone(), self.stack.len() - num_args as usize),
+                                val.num_locals,
+                            )
                         }
                         _ => {
                             println!(
@@ -200,7 +209,6 @@ impl VM {
                     for _ in 0..num_locals {
                         self.push(object::Object::Null)?;
                     }
-
                 }
                 OP_RETURN_VALUE => {
                     let return_value = self.pop()?;
@@ -302,7 +310,12 @@ impl VM {
 
                 self.push(object::Object::String(value))?;
             }
-            _ => return Err(String::from(format!("types don't support arithmetic {:?} and {:?}", left_obj, right_obj))),
+            _ => {
+                return Err(String::from(format!(
+                    "types don't support arithmetic {:?} and {:?}",
+                    left_obj, right_obj
+                )))
+            }
         };
 
         Ok(())
@@ -772,16 +785,31 @@ mod test {
                     .to_owned(),
                 expected: 3,
             },
-
             // lost likely failts due to parser being bad
-        //     VmTestcase {
-        //         input: "fn first() -> int { int one = 1; return one; };
-        //                 fn second() -> int { int two = 2; return two; };
-        //                 first() + second();"
-        //             .to_owned(),
-        //         expected: 3,
-        //     },
-        // ];
+            //     VmTestcase {
+            //         input: "fn first() -> int { int one = 1; return one; };
+            //                 fn second() -> int { int two = 2; return two; };
+            //                 first() + second();"
+            //             .to_owned(),
+            //         expected: 3,
+            //     },
+            // ];
+        ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn function_with_arguments() {
+        let tests = vec![
+            VmTestcase {
+                input: "fn identity(int a) -> int { return a; }; identity(5);".to_owned(),
+                expected: 5,
+            },
+            VmTestcase {
+                input: "fn sum(int a, int b) -> int { return a + b; }; sum(1, 2);".to_owned(),
+                expected: 3,
+            },
         ];
 
         run_vm_tests(tests);

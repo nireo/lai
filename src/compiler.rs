@@ -183,10 +183,11 @@ impl Compiler {
                 }
                 ast::Statement::Function(exp) => {
                     self.enter_scope();
-                    for arg in exp.params {
+
+                    for arg in &exp.params {
                         match arg {
                             ast::Expression::FunctionParam(val) => {
-                                self.symbol_table.define(val.name, val.value_type);
+                                self.symbol_table.define(val.name.clone(), val.value_type.clone());
                             }
                             _ => return Err(String::from("not a function parameter")),
                         }
@@ -209,7 +210,7 @@ impl Compiler {
                     let instructions = self.leave_scope();
 
                     let compiled_function = object::Object::CompiledFunction(
-                        object::CompiledFunction::new_with_locals(instructions, num_locals),
+                        object::CompiledFunction::new_with_params(instructions, num_locals, exp.params.len()),
                     );
 
                     let pos = self.add_constant(compiled_function);

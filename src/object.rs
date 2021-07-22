@@ -16,6 +16,7 @@ pub struct FunctionObject {
 pub struct CompiledFunction {
     pub instructions: opcode::Inst,
     pub num_locals: usize,
+    pub num_params: usize,
 }
 
 impl CompiledFunction {
@@ -23,13 +24,15 @@ impl CompiledFunction {
         Self {
             instructions,
             num_locals: 0,
+            num_params: 0,
         }
     }
 
-    pub fn new_with_locals(instructions: Inst, num_locals: usize) -> Self {
+    pub fn new_with_params(instructions: Inst, num_locals: usize, num_params: usize) -> Self {
         Self {
             instructions,
             num_locals,
+            num_params,
         }
     }
 }
