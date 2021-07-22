@@ -183,6 +183,15 @@ impl Compiler {
                 }
                 ast::Statement::Function(exp) => {
                     self.enter_scope();
+                    for arg in exp.params {
+                        match arg {
+                            ast::Expression::FunctionParam(val) => {
+                                self.symbol_table.define(val.name, val.value_type);
+                            }
+                            _ => return Err(String::from("not a function parameter")),
+                        }
+                    }
+
                     self.compile(ast::Node::Statement(exp.body))?;
 
                     if self.last_instruction_is(OP_POP) {
@@ -252,7 +261,12 @@ impl Compiler {
                 }
                 ast::Expression::FunctionCall(exp) => {
                     self.compile(ast::Node::Expression(exp.func))?;
-                    self.emit_single(OP_CALL);
+
+                    for arg in exp.args.iter() {
+                        self.compile(ast::Node::Expression(Box::new(arg.clone())))?;
+                    }
+
+                    self.emit(OP_CALL, exp.args.len());
                 }
                 ast::Expression::Function(exp) => {
                     self.enter_scope();
@@ -1017,26 +1031,74 @@ mod test {
 
     #[test]
     fn function_calls() {
-        let tests = vec![CompilerTestcase {
-            input: "fn func() -> int { 24 }; func();".to_owned(),
-            expected_consts: vec![
-                object::Object::Integer(24),
-                object::Object::CompiledFunction(object::CompiledFunction::new(
-                    concat_instructions(&vec![
-                        make(OP_CONSTANT, 0).unwrap(),
-                        make_simple(OP_RETURN_VALUE),
-                    ])
-                    .clone(),
-                )),
-            ],
-            expected_insts: vec![
-                make(OP_CONSTANT, 1).unwrap(),
-                make(OP_SET_GLOBAL, 0).unwrap(),
-                make(OP_GET_GLOBAL, 0).unwrap(),
-                make_simple(OP_CALL),
-                make_simple(OP_POP),
-            ],
-        }];
+        let tests = vec![
+            CompilerTestcase {
+                input: "fn func() -> int { 24 }; func();".to_owned(),
+                expected_consts: vec![
+                    object::Object::Integer(24),
+                    object::Object::CompiledFunction(object::CompiledFunction::new(
+                        concat_instructions(&vec![
+                            make(OP_CONSTANT, 0).unwrap(),
+                            make_simple(OP_RETURN_VALUE),
+                        ])
+                        .clone(),
+                    )),
+                ],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make(OP_SET_GLOBAL, 0).unwrap(),
+                    make(OP_GET_GLOBAL, 0).unwrap(),
+                    make(OP_CALL, 0).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "fn oneArg(int a) -> int { return a; }; oneArg(24);".to_owned(),
+                expected_consts: vec![
+                    object::Object::CompiledFunction(object::CompiledFunction::new(
+                        concat_instructions(&vec![
+                            make(OP_GET_LOCAL, 0).unwrap(),
+                            make_simple(OP_RETURN_VALUE),
+                        ])
+                        .clone(),
+                    )),
+                    object::Object::Integer(24),
+                ],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_SET_GLOBAL, 0).unwrap(),
+                    make(OP_GET_GLOBAL, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make(OP_CALL, 1).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+            CompilerTestcase {
+                input: "fn manyArg(int a, int b) -> int { return a + b; }; manyArg(24, 25);"
+                    .to_owned(),
+                expected_consts: vec![
+                    object::Object::CompiledFunction(object::CompiledFunction::new(
+                        concat_instructions(&vec![
+                            make(OP_GET_LOCAL, 0).unwrap(),
+                            make(OP_GET_LOCAL, 1).unwrap(),
+                            make_simple(OP_ADD),
+                            make_simple(OP_RETURN_VALUE),
+                        ]).clone(),
+                    )),
+                    object::Object::Integer(24),
+                    object::Object::Integer(25),
+                ],
+                expected_insts: vec![
+                    make(OP_CONSTANT, 0).unwrap(),
+                    make(OP_SET_GLOBAL, 0).unwrap(),
+                    make(OP_GET_GLOBAL, 0).unwrap(),
+                    make(OP_CONSTANT, 1).unwrap(),
+                    make(OP_CONSTANT, 2).unwrap(),
+                    make(OP_CALL, 2).unwrap(),
+                    make_simple(OP_POP),
+                ],
+            },
+        ];
 
         run_compiler_test(tests);
     }
@@ -1082,7 +1144,10 @@ mod test {
         assert_eq!(compiler.scope_index, 1);
 
         compiler.emit_single(OP_SUB);
-        assert_eq!(compiler.scopes[compiler.scope_index].instructions.0.len(), 1);
+        assert_eq!(
+            compiler.scopes[compiler.scope_index].instructions.0.len(),
+            1
+        );
 
         let last = compiler.scopes[compiler.scope_index].last_inst.clone();
         assert_eq!(last.opcode, OP_SUB);
@@ -1092,7 +1157,10 @@ mod test {
         assert!(compiler.symbol_table.outer.is_none());
 
         compiler.emit_single(OP_ADD);
-        assert_eq!(compiler.scopes[compiler.scope_index].instructions.0.len(), 2);
+        assert_eq!(
+            compiler.scopes[compiler.scope_index].instructions.0.len(),
+            2
+        );
 
         let last = compiler.scopes[compiler.scope_index].last_inst.clone();
         assert_eq!(last.opcode, OP_ADD);

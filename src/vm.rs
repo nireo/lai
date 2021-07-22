@@ -178,6 +178,7 @@ impl VM {
                     self.push(object::Object::Array(array_elements))?;
                 }
                 OP_CALL => {
+                    self.current_frame().ip += 1;
                     let func = self.stack[self.stack.len() - 1].clone();
                     let (frame, num_locals) = match &func {
                         object::Object::CompiledFunction(val) => {
@@ -199,6 +200,7 @@ impl VM {
                     for _ in 0..num_locals {
                         self.push(object::Object::Null)?;
                     }
+
                 }
                 OP_RETURN_VALUE => {
                     let return_value = self.pop()?;

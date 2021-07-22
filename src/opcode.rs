@@ -41,6 +41,7 @@ fn get_definition(opcode: u8) -> usize {
         OP_ARRAY => 2,
         OP_GET_LOCAL => 1,
         OP_SET_LOCAL => 1,
+        OP_CALL => 1,
         _ => 0,
     }
 }
