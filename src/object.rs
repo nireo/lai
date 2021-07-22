@@ -15,12 +15,21 @@ pub struct FunctionObject {
 #[derive(Clone, Debug)]
 pub struct CompiledFunction {
     pub instructions: opcode::Inst,
+    pub num_locals: usize,
 }
 
 impl CompiledFunction {
     pub fn new(instructions: Inst) -> Self {
         Self {
             instructions,
+            num_locals: 0,
+        }
+    }
+
+    pub fn new_with_locals(instructions: Inst, num_locals: usize) -> Self {
+        Self {
+            instructions,
+            num_locals,
         }
     }
 }

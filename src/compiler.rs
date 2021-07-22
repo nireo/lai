@@ -196,10 +196,11 @@ impl Compiler {
                         self.emit_single(OP_RETURN);
                     }
 
+                    let num_locals = self.symbol_table.definition_count;
                     let instructions = self.leave_scope();
 
                     let compiled_function = object::Object::CompiledFunction(
-                        object::CompiledFunction::new(instructions),
+                        object::CompiledFunction::new_with_locals(instructions, num_locals),
                     );
 
                     let pos = self.add_constant(compiled_function);
