@@ -25,6 +25,7 @@ pub const OP_RETURN_VALUE: u8 = 21;
 pub const OP_RETURN: u8 = 22;
 pub const OP_GET_LOCAL: u8 = 23;
 pub const OP_SET_LOCAL: u8 = 24;
+pub const OP_GET_BUILTIN: u8 = 25;
 
 #[derive(Clone, Debug)]
 pub struct Inst(pub Vec<u8>);
@@ -41,6 +42,7 @@ fn get_definition(opcode: u8) -> usize {
         OP_ARRAY => 2,
         OP_GET_LOCAL => 1,
         OP_SET_LOCAL => 1,
+        OP_GET_BUILTIN => 1,
         OP_CALL => 1,
         _ => 0,
     }

@@ -6,6 +6,7 @@ pub mod parser;
 pub mod scanner;
 pub mod regvm;
 pub mod vm;
+pub mod builtin;
 use std::io::{self, BufRead};
 
 fn main() {

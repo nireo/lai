@@ -15,6 +15,7 @@ use crate::{
 pub enum Scope {
     Global,
     Local,
+    Builtin
 }
 
 pub struct CompilationScope {
@@ -92,6 +93,18 @@ impl SymbolTable {
 
         symbol
     }
+
+    fn define_builtin(&mut self, name: String, index: usize) -> Symbol {
+        let symbol = Symbol {
+            name: name.clone(),
+            index,
+            scope: Scope::Builtin,
+            value_type: Token::Fn,
+        };
+
+        self.store.insert(name.clone(), symbol.clone());
+        symbol
+    }
 }
 
 #[derive(Clone)]
@@ -121,12 +134,15 @@ impl Compiler {
         let mut scopes: Vec<CompilationScope> = Vec::new();
         scopes.push(main_scope);
 
+        let mut symbol_table = SymbolTable::new();
+        symbol_table.define_builtin("len".to_string(), 0);
+
         Self {
             consts: Vec::new(),
             insts: Inst(Vec::new()),
-
-            symbol_table: SymbolTable::new(),
             scope_index: 0,
+
+            symbol_table,
             scopes,
         }
     }
@@ -314,6 +330,9 @@ impl Compiler {
                     if symbol.scope == Scope::Global {
                         let index = symbol.index;
                         self.emit(OP_GET_GLOBAL, index);
+                    } else if symbol.scope == Scope::Local {
+                        let index = symbol.index;
+                        self.emit(OP_GET_LOCAL, index);
                     } else {
                         let index = symbol.index;
                         self.emit(OP_GET_LOCAL, index);
