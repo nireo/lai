@@ -144,8 +144,6 @@ impl VM {
                         return Err(String::from("invalid builtin function index"));
                     }
 
-                    println!("called builtin");
-
                     let func = func.unwrap();
 
                     self.push(object::Object::Builtin(func))?;
@@ -191,13 +189,13 @@ impl VM {
                     self.push(object::Object::Array(array_elements))?;
                 }
                 OP_CALL => {
-                    let num_args = u8::from_be_bytes([ins.0[ip + 1]]);
+                    let num_args = u8::from_be_bytes([ins.0[ip + 1]]) as usize;
                     self.current_frame().ip += 1;
-                    let func = self.stack.remove(self.stack.len() - 1 - num_args as usize);
+                    let func = self.stack.remove(self.stack.len() - 1 - num_args);
 
                     match &func {
                         object::Object::CompiledFunction(val) => {
-                            if num_args as usize != val.num_params {
+                            if num_args != val.num_params {
                                 return Err(String::from(format!(
                                     "wrong amount of arguments got: {} want: {}",
                                     num_args, val.num_params
@@ -205,7 +203,7 @@ impl VM {
                             }
 
                             let frame =
-                                Frame::new(val.clone(), self.stack.len() - num_args as usize);
+                                Frame::new(val.clone(), self.stack.len() - num_args);
                             self.push_frame(frame);
 
                             for _ in 0..val.num_locals {
@@ -214,7 +212,7 @@ impl VM {
                         }
                         object::Object::Builtin(val) => {
                             let args = self.stack
-                                [(self.stack.len() - num_args as usize)..self.stack.len()]
+                                [(self.stack.len() - num_args)..self.stack.len()]
                                 .to_vec();
 
                             let res = val(args);
