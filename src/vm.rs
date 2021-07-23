@@ -193,7 +193,7 @@ impl VM {
                 OP_CALL => {
                     let num_args = u8::from_be_bytes([ins.0[ip + 1]]);
                     self.current_frame().ip += 1;
-                    let func = self.stack[self.stack.len() - 1 - num_args as usize].clone();
+                    let func = self.stack.remove(self.stack.len() - 1 - num_args as usize);
 
                     match &func {
                         object::Object::CompiledFunction(val) => {
@@ -245,7 +245,7 @@ impl VM {
                 }
                 OP_RETURN => {
                     let base_pointer = self.pop_frame().unwrap().base_pointer;
-                    while base_pointer <= self.stack.len() {
+                    while base_pointer < self.stack.len() {
                         self.pop()?;
                     }
 
@@ -808,15 +808,13 @@ mod test {
                     .to_owned(),
                 expected: 3,
             },
-            // lost likely failts due to parser being bad
-            //     VmTestcase {
-            //         input: "fn first() -> int { int one = 1; return one; };
-            //                 fn second() -> int { int two = 2; return two; };
-            //                 first() + second();"
-            //             .to_owned(),
-            //         expected: 3,
-            //     },
-            // ];
+            VmTestcase {
+                input: "fn first() -> int { int one = 1; return one; };
+                            fn second() -> int { int two = 2; return two; };
+                            first() + second();"
+                    .to_owned(),
+                expected: 3,
+            },
         ];
 
         run_vm_tests(tests);
