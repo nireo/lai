@@ -1,6 +1,6 @@
-use crate::object::{self, Object};
+use crate::object::Object;
 
-fn builtin_len(args: &[Object]) -> Object {
+pub fn builtin_len(args: Vec<Object>) -> Object {
     if args.len() != 1 {
         return Object::Null
     }
@@ -12,9 +12,16 @@ fn builtin_len(args: &[Object]) -> Object {
     }
 }
 
-fn builtin_from_name(name: &str) -> Option<fn(&[Object]) -> Object> {
+pub fn builtin_from_name(name: &str) -> Option<fn(Vec<Object>) -> Object> {
     match name {
         "len" => Some(builtin_len),
+        _ => None
+    }
+}
+
+pub fn builtin_from_index(index: usize) -> Option<fn(Vec<Object>) -> Object> {
+    match index {
+        0 => Some(builtin_len),
         _ => None
     }
 }

@@ -48,6 +48,7 @@ pub enum Object {
     Array(Vec<Object>),
     CompiledFunction(CompiledFunction),
     Error(String),
+    Builtin(fn(Vec<Object>) -> Object),
     Null,
 }
 

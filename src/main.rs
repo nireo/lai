@@ -25,19 +25,6 @@ fn main() {
         let res = compiler.compile(root_node);
         assert!(!res.is_err());
 
-        let mut vm = vm::VM::new(compiler.consts, compiler.insts);
-
-        let res = vm.run();
-        assert!(!res.is_err());
-
-        let res = vm.get_last();
-
-        match &res {
-            object::Object::Integer(val) => println!("{}", val),
-            object::Object::String(val) => println!("{}", val),
-            object::Object::Float(val) => println!("{}", val),
-            object::Object::Bool(val) => println!("{}", val),
-            _ => println!("object display not supported"),
-        };
+        // let mut vm = vm::VM::new(compiler.consts, compiler.insts);
     }
 }

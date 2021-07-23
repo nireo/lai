@@ -1,9 +1,10 @@
 use crate::{
-    object,
+    builtin, object,
     opcode::{
         Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE,
-        OP_GET_GLOBAL, OP_GET_LOCAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE,
-        OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SET_LOCAL, OP_SUB, OP_TRUE,
+        OP_GET_BUILTIN, OP_GET_GLOBAL, OP_GET_LOCAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS,
+        OP_MUL, OP_NE, OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SET_LOCAL,
+        OP_SUB, OP_TRUE,
     },
 };
 
@@ -134,6 +135,21 @@ impl VM {
 
                     self.push(self.globals[index].clone())?;
                 }
+                OP_GET_BUILTIN => {
+                    let builtin_index = u8::from_be_bytes([ins.0[ip + 1]]);
+                    self.current_frame().ip += 2;
+
+                    let func = builtin::builtin_from_index(builtin_index as usize);
+                    if func.is_none() {
+                        return Err(String::from("invalid builtin function index"));
+                    }
+
+                    println!("called builtin");
+
+                    let func = func.unwrap();
+
+                    self.push(object::Object::Builtin(func))?;
+                }
                 OP_JMPNT => {
                     let pos = u16::from_be_bytes([ins.0[ip + 1], ins.0[ip + 2]]) as usize;
                     self.current_frame().ip += 3;
@@ -179,7 +195,7 @@ impl VM {
                     self.current_frame().ip += 1;
                     let func = self.stack[self.stack.len() - 1 - num_args as usize].clone();
 
-                    let (frame, num_locals) = match &func {
+                    match &func {
                         object::Object::CompiledFunction(val) => {
                             if num_args as usize != val.num_params {
                                 return Err(String::from(format!(
@@ -188,10 +204,23 @@ impl VM {
                                 )));
                             }
 
-                            (
-                                Frame::new(val.clone(), self.stack.len() - num_args as usize),
-                                val.num_locals,
-                            )
+                            let frame =
+                                Frame::new(val.clone(), self.stack.len() - num_args as usize);
+                            self.push_frame(frame);
+
+                            for _ in 0..val.num_locals {
+                                self.push(object::Object::Null)?;
+                            }
+                        }
+                        object::Object::Builtin(val) => {
+                            let args = self.stack
+                                [(self.stack.len() - num_args as usize)..self.stack.len()]
+                                .to_vec();
+
+                            let res = val(args);
+                            self.current_frame().ip += 1;
+
+                            self.push(res)?;
                         }
                         _ => {
                             println!(
@@ -203,12 +232,6 @@ impl VM {
                             return Err(String::from("calling a non-function"));
                         }
                     };
-
-                    self.push_frame(frame);
-
-                    for _ in 0..num_locals {
-                        self.push(object::Object::Null)?;
-                    }
                 }
                 OP_RETURN_VALUE => {
                     let return_value = self.pop()?;
@@ -811,6 +834,16 @@ mod test {
                 expected: 3,
             },
         ];
+
+        run_vm_tests(tests);
+    }
+
+    #[test]
+    fn builtin_test() {
+        let tests = vec![VmTestcase {
+            input: "len(\"lai\")".to_owned(),
+            expected: 3,
+        }];
 
         run_vm_tests(tests);
     }

@@ -1,15 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    ast, object,
-    opcode::{
-        make, make_simple, Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ,
-        OP_FALSE, OP_GET_GLOBAL, OP_GET_LOCAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL,
-        OP_NE, OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SET_LOCAL, OP_SUB,
-        OP_TRUE,
-    },
-    scanner::{self, Token},
-};
+use crate::{ast, object, opcode::{Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_BUILTIN, OP_GET_GLOBAL, OP_GET_LOCAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SET_LOCAL, OP_SUB, OP_TRUE, make, make_simple}, scanner::{self, Token}};
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Scope {
@@ -333,9 +324,9 @@ impl Compiler {
                     } else if symbol.scope == Scope::Local {
                         let index = symbol.index;
                         self.emit(OP_GET_LOCAL, index);
-                    } else {
+                    } else  if symbol.scope == Scope::Builtin {
                         let index = symbol.index;
-                        self.emit(OP_GET_LOCAL, index);
+                        self.emit(OP_GET_BUILTIN, index);
                     }
                 }
                 ast::Expression::If(e) => {
