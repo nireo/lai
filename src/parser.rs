@@ -54,7 +54,6 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> Option<ast::Statement> {
-        println!("{:?}", &self.current_token);
         match self.current_token {
             Token::Fn => self.parse_function_statement(),
             Token::Integer | Token::Float | Token::Char | Token::String => {
@@ -262,7 +261,6 @@ impl Parser {
 
         let body = Box::new(self.parse_block_statement()?);
 
-        println!("function statement");
 
         Some(ast::Statement::Function(ast::FunctionNode {
             params: function_parameters,

@@ -172,10 +172,8 @@ impl Compiler {
                     }
                 }
                 ast::Statement::Assigment(exp) => {
-                    println!("this is an assigment statement");
-                    self.compile(ast::Node::Expression(Box::new(exp.value)))?;
                     let symbol = self.symbol_table.define(exp.name, exp.variable_type);
-                    println!("set symbol");
+                    self.compile(ast::Node::Expression(Box::new(exp.value)))?;
                     if symbol.scope == Scope::Global {
                         let index = symbol.index;
                         self.emit(OP_SET_GLOBAL, index);
@@ -189,8 +187,13 @@ impl Compiler {
                     self.emit_single(OP_RETURN_VALUE);
                 }
                 ast::Statement::Function(exp) => {
-                    self.enter_scope();
+                    let name = match &*exp.identifier {
+                        ast::Expression::Identifier(val) => val.name.clone(),
+                        _ => return Err(String::from("function identifier is not valid")),
+                    };
 
+                    let symbol = self.symbol_table.define(name, exp.return_type);
+                    self.enter_scope();
                     for arg in &exp.params {
                         match arg {
                             ast::Expression::FunctionParam(val) => {
@@ -223,12 +226,7 @@ impl Compiler {
                     let pos = self.add_constant(compiled_function);
                     self.emit(OP_CONSTANT, pos);
 
-                    let name = match &*exp.identifier {
-                        ast::Expression::Identifier(val) => val.name.clone(),
-                        _ => return Err(String::from("function identifier is not valid")),
-                    };
 
-                    let symbol = self.symbol_table.define(name, exp.return_type);
                     let index = symbol.index;
                     self.emit(OP_SET_GLOBAL, index);
                 }
