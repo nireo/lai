@@ -69,7 +69,7 @@ impl Scanner {
     }
 
     fn check_if_keyword(&self, keyword: &str) -> Token {
-        let token_type = match keyword {
+        match keyword {
             "if" => Token::If,
             "else" => Token::Else,
             "float" => Token::Float,
@@ -82,8 +82,7 @@ impl Scanner {
             "void" => Token::Void,
             "fn" => Token::Fn,
             _ => Token::Identifier(keyword.to_string()),
-        };
-        token_type
+        }
     }
 
     fn read_char(&mut self) {
@@ -137,7 +136,7 @@ impl Scanner {
                 b'"' | 0 => {
                     let value = self.input[position + 1..self.pos].to_string();
                     self.read_char();
-                    return value.to_string();
+                    return value;
                 }
                 _ => {
                     self.read_char();

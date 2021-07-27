@@ -72,7 +72,7 @@ impl VM {
     }
 
     pub fn stack_top(&self) -> Option<object::Object> {
-        if self.stack.len() == 0 {
+        if self.stack.is_empty() {
             None
         } else {
             Some(self.stack[self.stack.len() - 1].clone())
@@ -87,7 +87,7 @@ impl VM {
         while self.current_frame().ip < self.current_frame().instructions().0.len() {
             let ip = self.current_frame().ip;
             let ins = self.current_frame().instructions();
-            let op = ins.0[ip].clone();
+            let op = ins.0[ip];
 
             match op {
                 OP_CONSTANT => {
@@ -196,10 +196,10 @@ impl VM {
                     match &func {
                         object::Object::CompiledFunction(val) => {
                             if num_args != val.num_params {
-                                return Err(String::from(format!(
+                                return Err(format!(
                                     "wrong amount of arguments got: {} want: {}",
                                     num_args, val.num_params
-                                )));
+                                ));
                             }
 
                             let frame =
@@ -287,7 +287,7 @@ impl VM {
 
     fn is_truthy(obj: &object::Object) -> bool {
         match obj {
-            object::Object::Bool(val) => val.clone(),
+            object::Object::Bool(val) => *val,
             object::Object::Null => false,
             _ => true,
         }
@@ -332,10 +332,10 @@ impl VM {
                 self.push(object::Object::String(value))?;
             }
             _ => {
-                return Err(String::from(format!(
+                return Err(format!(
                     "types don't support arithmetic {:?} and {:?}",
                     left_obj, right_obj
-                )))
+                ))
             }
         };
 
@@ -408,8 +408,7 @@ impl VM {
     }
 
     fn pop(&mut self) -> Result<object::Object, String> {
-        if self.stack.len() == 0 {
-            // stack empty
+        if self.stack.is_empty() {
             Err(String::from("cannot pop: stack is empty."))
         } else {
             Ok(self.stack.pop().unwrap())

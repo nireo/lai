@@ -42,9 +42,8 @@ impl Parser {
         };
 
         while self.current_token != Token::EOF {
-            let statement = self.parse_statement();
-            if statement.is_some() {
-                root.statements.push(statement.unwrap());
+            if let Some(statement) = self.parse_statement() {
+                root.statements.push(statement);
             }
 
             self.next_token();
@@ -70,7 +69,7 @@ impl Parser {
         self.next_token();
 
         let name: String = match &self.current_token {
-            Token::Identifier(value) => value.to_owned().clone(),
+            Token::Identifier(value) => value.to_owned(),
             _ => return None,
         };
 
@@ -85,11 +84,11 @@ impl Parser {
             self.next_token();
         }
 
-        return Some(ast::Statement::Assigment(ast::AssigmentNode {
+        Some(ast::Statement::Assigment(ast::AssigmentNode {
             value: assigment_value,
             variable_type: assigment_type,
             name,
-        }));
+        }))
     }
 
     fn parse_return_statement(&mut self) -> Option<ast::Statement> {
@@ -101,18 +100,18 @@ impl Parser {
             self.next_token();
         }
 
-        return Some(ast::Statement::Return(ast::ReturnNode {
+        Some(ast::Statement::Return(ast::ReturnNode {
             value: return_value,
-        }));
+        }))
     }
 
     fn parse_identifier(&self) -> Option<ast::Expression> {
         let name: String = match &self.current_token {
-            Token::Identifier(value) => value.to_owned().clone(),
+            Token::Identifier(value) => value.to_owned(),
             _ => return None,
         };
 
-        return Some(ast::Expression::Identifier(ast::IdentifierNode { name }));
+        Some(ast::Expression::Identifier(ast::IdentifierNode { name }))
     }
 
     fn parse_infix(&mut self, lhs: Box<ast::Expression>) -> Option<ast::Expression> {
@@ -195,8 +194,8 @@ impl Parser {
         let args = self.parse_call_arguments()?;
 
         Some(ast::Expression::FunctionCall(ast::FunctionCallNode {
-            args,
             func,
+            args,
         }))
     }
 
@@ -261,7 +260,6 @@ impl Parser {
 
         let body = Box::new(self.parse_block_statement()?);
 
-
         Some(ast::Statement::Function(ast::FunctionNode {
             params: function_parameters,
             body,
@@ -286,7 +284,7 @@ impl Parser {
         self.next_token();
 
         let first_param_name: String = match &self.current_token {
-            Token::Identifier(value) => value.to_owned().clone(),
+            Token::Identifier(value) => value.to_owned(),
             _ => return None,
         };
 
@@ -322,10 +320,10 @@ impl Parser {
     }
 
     pub fn is_type_token(tok: &Token) -> bool {
-        match tok {
-            Token::Void | Token::Integer | Token::String | Token::Char | Token::Float => true,
-            _ => false,
-        }
+        matches!(
+            tok,
+            Token::Void | Token::Integer | Token::String | Token::Char | Token::Float
+        )
     }
 
     // if (<expr>) { <statement> } else { <statement> }

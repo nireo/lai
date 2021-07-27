@@ -1,12 +1,21 @@
 use std::collections::HashMap;
 
-use crate::{ast, object, opcode::{Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ, OP_FALSE, OP_GET_BUILTIN, OP_GET_GLOBAL, OP_GET_LOCAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT, OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL, OP_SET_LOCAL, OP_SUB, OP_TRUE, make, make_simple}, scanner::{self, Token}};
+use crate::{
+    ast, object,
+    opcode::{
+        make, make_simple, Inst, OP_ADD, OP_ARRAY, OP_BANG, OP_CALL, OP_CONSTANT, OP_DIV, OP_EQ,
+        OP_FALSE, OP_GET_BUILTIN, OP_GET_GLOBAL, OP_GET_LOCAL, OP_GT, OP_INDEX, OP_JMP, OP_JMPNT,
+        OP_MINUS, OP_MUL, OP_NE, OP_NULL, OP_POP, OP_RETURN, OP_RETURN_VALUE, OP_SET_GLOBAL,
+        OP_SET_LOCAL, OP_SUB, OP_TRUE,
+    },
+    scanner::{self, Token},
+};
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Scope {
     Global,
     Local,
-    Builtin
+    Builtin,
 }
 
 pub struct CompilationScope {
@@ -58,15 +67,12 @@ impl SymbolTable {
                 }
             }
 
-            Err(String::from(format!(
-                "variable with name '{}' is not defined",
-                name
-            )))
+            Err(format!("variable with name '{}' is not defined", name))
         }
     }
 
     fn define(&mut self, name: String, value_type: Token) -> Symbol {
-        let scope = if let Some(_) = &self.outer {
+        let scope = if self.outer.is_some() {
             Scope::Local
         } else {
             Scope::Global
@@ -79,7 +85,7 @@ impl SymbolTable {
             value_type,
         };
 
-        self.store.insert(name.clone(), symbol.clone());
+        self.store.insert(name, symbol.clone());
         self.definition_count += 1;
 
         symbol
@@ -93,7 +99,7 @@ impl SymbolTable {
             value_type: Token::Fn,
         };
 
-        self.store.insert(name.clone(), symbol.clone());
+        self.store.insert(name, symbol.clone());
         symbol
     }
 }
@@ -114,6 +120,12 @@ pub struct Compiler {
     pub scopes: Vec<CompilationScope>,
 }
 
+impl Default for Compiler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Compiler {
     pub fn new() -> Self {
         let main_scope = CompilationScope {
@@ -122,9 +134,7 @@ impl Compiler {
             prev_inst: EmittedInstruction { opcode: 0, pos: 0 },
         };
 
-        let mut scopes: Vec<CompilationScope> = Vec::new();
-        scopes.push(main_scope);
-
+        let scopes: Vec<CompilationScope> = vec![main_scope];
         let mut symbol_table = SymbolTable::new();
         symbol_table.define_builtin("len".to_string(), 0);
 
@@ -174,11 +184,10 @@ impl Compiler {
                 ast::Statement::Assigment(exp) => {
                     let symbol = self.symbol_table.define(exp.name, exp.variable_type);
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
+                    let index = symbol.index;
                     if symbol.scope == Scope::Global {
-                        let index = symbol.index;
                         self.emit(OP_SET_GLOBAL, index);
                     } else {
-                        let index = symbol.index;
                         self.emit(OP_SET_LOCAL, index);
                     }
                 }
@@ -197,7 +206,8 @@ impl Compiler {
                     for arg in &exp.params {
                         match arg {
                             ast::Expression::FunctionParam(val) => {
-                                self.symbol_table.define(val.name.clone(), val.value_type.clone());
+                                self.symbol_table
+                                    .define(val.name.clone(), val.value_type.clone());
                             }
                             _ => return Err(String::from("not a function parameter")),
                         }
@@ -220,12 +230,15 @@ impl Compiler {
                     let instructions = self.leave_scope();
 
                     let compiled_function = object::Object::CompiledFunction(
-                        object::CompiledFunction::new_with_params(instructions, num_locals, exp.params.len()),
+                        object::CompiledFunction::new_with_params(
+                            instructions,
+                            num_locals,
+                            exp.params.len(),
+                        ),
                     );
 
                     let pos = self.add_constant(compiled_function);
                     self.emit(OP_CONSTANT, pos);
-
 
                     let index = symbol.index;
                     self.emit(OP_SET_GLOBAL, index);
@@ -233,7 +246,7 @@ impl Compiler {
             },
             ast::Node::Expression(exp) => match *exp {
                 ast::Expression::String(exp) => {
-                    let str_const = object::Object::String(exp.value.clone());
+                    let str_const = object::Object::String(exp.value);
                     let pos = self.add_constant(str_const);
                     self.emit(OP_CONSTANT, pos);
                 }
@@ -322,7 +335,7 @@ impl Compiler {
                     } else if symbol.scope == Scope::Local {
                         let index = symbol.index;
                         self.emit(OP_GET_LOCAL, index);
-                    } else  if symbol.scope == Scope::Builtin {
+                    } else if symbol.scope == Scope::Builtin {
                         let index = symbol.index;
                         self.emit(OP_GET_BUILTIN, index);
                     }
@@ -431,7 +444,7 @@ impl Compiler {
     }
 
     fn last_instruction_is(&self, inst: u8) -> bool {
-        if self.current_instructions().0.len() == 0 {
+        if self.current_instructions().0.is_empty() {
             false
         } else {
             self.scopes[self.scope_index].last_inst.opcode == inst
@@ -450,9 +463,11 @@ impl Compiler {
     }
 
     fn replace_instruction(&mut self, pos: usize, insts: Vec<u8>) {
-        for i in 0..insts.len() {
-            self.scopes[self.scope_index].instructions.0[pos + i] = insts[i];
-        }
+        // for i in 0..insts.len() {
+        //     self.scopes[self.scope_index].instructions.0[pos + i] = insts[i];
+        // }
+        //
+        self.scopes[self.scope_index].instructions.0[pos..(insts.len() + pos)].clone_from_slice(&insts);
     }
 
     fn add_inst(&mut self, inst: &[u8]) -> usize {
@@ -1092,7 +1107,8 @@ mod test {
                             make(OP_GET_LOCAL, 1).unwrap(),
                             make_simple(OP_ADD),
                             make_simple(OP_RETURN_VALUE),
-                        ]).clone(),
+                        ])
+                        .clone(),
                     )),
                     object::Object::Integer(24),
                     object::Object::Integer(25),
