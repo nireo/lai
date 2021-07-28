@@ -137,6 +137,7 @@ impl Compiler {
         let scopes: Vec<CompilationScope> = vec![main_scope];
         let mut symbol_table = SymbolTable::new();
         symbol_table.define_builtin("len".to_string(), 0);
+        symbol_table.define_builtin("print".to_string(), 1);
 
         Self {
             consts: Vec::new(),

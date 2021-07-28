@@ -80,14 +80,5 @@ fn main() {
             println!("{}", res.as_ref().err().unwrap())
         }
         assert!(!res.is_err());
-
-        let top = vm.get_last();
-        match &top {
-            object::Object::Integer(val) => println!("{}", val),
-            object::Object::String(val) => println!("{}", val),
-            object::Object::Float(val) => println!("{}", val),
-            object::Object::Bool(val) => println!("{}", val),
-            _ => println!("object display not supported"),
-        };
     }
 }

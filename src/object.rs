@@ -54,17 +54,13 @@ pub enum Object {
 
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Object::Integer(_) => write!(f, "integer"),
-            Object::String(_) => write!(f, "string"),
+        match &*self {
+            Object::Integer(val) => write!(f, "{}", val),
+            Object::String(val) => write!(f, "{}", val),
             Object::Null => write!(f, "null"),
-            Object::Float(_) => write!(f, "float"),
-            Object::Bool(_) => write!(f, "bool"),
-            Object::Return(_) => write!(f, "return"),
-            Object::Function(_) => write!(f, "function"),
-            Object::Array(_) => write!(f, "array"),
-            Object::CompiledFunction(_) => write!(f, "function"),
-            _ => write!(f, "obj"),
+            Object::Float(val) => write!(f, "{}", val),
+            Object::Bool(val) => write!(f, "{}", val),
+            _ => write!(f, "non-printable-object"),
         }
     }
 }
