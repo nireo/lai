@@ -192,6 +192,8 @@ impl Compiler {
                         self.emit(OP_SET_LOCAL, index);
                     }
                 }
+                ast::Statement::WhileStatement(exp) => {
+                }
                 ast::Statement::Return(exp) => {
                     self.compile(ast::Node::Expression(Box::new(exp.value)))?;
                     self.emit_single(OP_RETURN_VALUE);

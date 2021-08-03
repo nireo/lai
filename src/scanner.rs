@@ -16,6 +16,8 @@ pub enum Token {
     True,
     False,
     Fn,
+    While,
+    For,
 
     // braces, brackets and parenthesis
     LParen,
@@ -81,6 +83,8 @@ impl Scanner {
             "false" => Token::False,
             "void" => Token::Void,
             "fn" => Token::Fn,
+            "while" => Token::While,
+            "for" => Token::For,
             _ => Token::Identifier(keyword.to_string()),
         }
     }

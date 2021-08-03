@@ -58,6 +58,7 @@ impl Parser {
             Token::Integer | Token::Float | Token::Char | Token::String => {
                 self.parse_assigment_statement()
             }
+            Token::While => self.parse_while_statement(),
             Token::Return => self.parse_return_statement(),
             _ => self.parse_expression_statement(),
         }
@@ -102,6 +103,33 @@ impl Parser {
 
         Some(ast::Statement::Return(ast::ReturnNode {
             value: return_value,
+        }))
+    }
+
+    fn parse_while_statement(&mut self) -> Option<ast::Statement> {
+        self.next_token();
+        if self.peek_token != Token::LParen {
+            return None;
+        }
+        self.next_token();
+
+        let condition = self.parse_expression(Precedence::Lowest)?;
+
+        if self.peek_token != Token::RParen {
+            return None;
+        }
+        self.next_token();
+
+        if self.peek_token != Token::LBrace {
+            return None;
+        }
+        self.next_token();
+
+        let body = Box::new(self.parse_block_statement()?);
+
+        Some(ast::Statement::WhileStatement(ast::WhileNode {
+            body,
+            condition: Box::new(condition),
         }))
     }
 
@@ -1111,6 +1139,25 @@ mod tests {
 
         let is_correct_type = match &root_node.statements[0] {
             ast::Statement::Function(_) => true,
+            _ => false,
+        };
+
+        assert!(is_correct_type);
+    }
+
+    #[test]
+    fn while_statement() {
+        let input = "while (1 == 1) { print(10); }";
+
+        let lexer = scanner::Scanner::new(input);
+        let mut parser = Parser::new(lexer);
+
+        let root_node = parser.parse_root_node();
+        assert!(root_node.is_some());
+        let root_node = root_node.unwrap();
+
+        let is_correct_type = match &root_node.statements[0] {
+            ast::Statement::WhileStatement(_) => true,
             _ => false,
         };
 

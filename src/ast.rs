@@ -35,11 +35,18 @@ pub enum Statement {
     Block(BlockNode),
     Expression(ExpressionStatementNode),
     Function(FunctionNode),
+    WhileStatement(WhileNode),
 }
 
 #[derive(Debug, Clone)]
 pub struct Root {
     pub statements: Vec<Statement>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileNode {
+    pub body: Box<Statement>,
+    pub condition: Box<Expression>,
 }
 
 #[derive(Debug, Clone)]
